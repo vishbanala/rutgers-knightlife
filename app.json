@@ -1,40 +1,43 @@
 {
   "expo": {
-    "name": "RutgersKnightLife",
-    "slug": "RutgersKnightLife",
+    "name": "RutgersNew",
+    "slug": "RutgersNew",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
-
     "extra": {
       "eas": {
         "projectId": "95ecb139-6b4d-4008-bd4e-78116b097aff"
       }
     },
-
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
-
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vishbanala.knightlife",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
-
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundColor": "#FFFFFF"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.vishbanala.knightlife"
     },
-
     "web": {
-      "favicon": "./assets/images/favicon.png"
-    },
-
-    "plugins": []
+      "bundler": "metro",
+      "favicon": "./assets/images/icon.png",
+      "shortName": "KnightLife",
+      "themeColor": "#CC0033",
+      "backgroundColor": "#FFFFFF",
+      "display": "standalone"
+    }
   }
 }

@@ -1,0 +1,10 @@
+{
+  "build": {
+    "development": {
+      "distribution": "simulator",
+      "ios": {
+        "simulator": true
+      }
+    }
+  }
+}

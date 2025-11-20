@@ -7,6 +7,9 @@ const ADMIN_KEY = "RUTGERS_SECRET_2025";  // MUST MATCH BACKEND
 
 export default function EventsScreen() {
   const [events, setEvents] = useState([]);
+  const [adminMode, setAdminMode] = useState(false); // ⬅ NEW
+  const [tempKey, setTempKey] = useState(""); // ⬅ NEW
+
   const [newEvent, setNewEvent] = useState({
     frat: "",
     date: "",
@@ -54,9 +57,18 @@ export default function EventsScreen() {
         },
       });
 
-      fetchEvents(); // refresh list
+      fetchEvents();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  /* 🔐 ADMIN LOGIN — unlock admin mode */
+  const tryLogin = () => {
+    if (tempKey === ADMIN_KEY) {
+      setAdminMode(true);
+    } else {
+      alert("Wrong admin key");
     }
   };
 
@@ -74,7 +86,7 @@ export default function EventsScreen() {
         <Text style={styles.buttonText}>Load Events</Text>
       </TouchableOpacity>
 
-      {/* Event list */}
+      {/* EVENT LIST */}
       <FlatList
         data={events}
         keyExtractor={(item) => item.id?.toString()}
@@ -84,27 +96,51 @@ export default function EventsScreen() {
             <Text style={styles.eventInfo}>{item.date} @ {item.time}</Text>
             <Text style={styles.eventDetails}>{item.details}</Text>
 
-            {/* DELETE BUTTON */}
-            <TouchableOpacity
-              onPress={() => deleteEvent(item.id)}
-              style={styles.deleteBtn}
-            >
-              <Text style={styles.deleteText}>Delete</Text>
-            </TouchableOpacity>
+            {/* DELETE ONLY IN ADMIN MODE */}
+            {adminMode && (
+              <TouchableOpacity
+                onPress={() => deleteEvent(item.id)}
+                style={styles.deleteBtn}
+              >
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       />
 
-      <Text style={styles.sectionTitle}>Create Event</Text>
+      {/* 🔐 ADMIN LOGIN SECTION (only visible when NOT logged in) */}
+      {!adminMode && (
+        <View style={{ marginTop: 20 }}>
+          <Text style={styles.sectionTitle}>Admin Login</Text>
+          <TextInput
+            style={styles.input}
+            secureTextEntry={true}
+            placeholder="Enter admin key"
+            value={tempKey}
+            onChangeText={setTempKey}
+          />
+          <TouchableOpacity style={styles.buttonBlack} onPress={tryLogin}>
+            <Text style={styles.buttonText}>Unlock Admin</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      <TextInput style={styles.input} placeholder="Frat" value={newEvent.frat} onChangeText={(t) => setNewEvent({ ...newEvent, frat: t })}/>
-      <TextInput style={styles.input} placeholder="Date" value={newEvent.date} onChangeText={(t) => setNewEvent({ ...newEvent, date: t })}/>
-      <TextInput style={styles.input} placeholder="Time" value={newEvent.time} onChangeText={(t) => setNewEvent({ ...newEvent, time: t })}/>
-      <TextInput style={styles.input} placeholder="Details" value={newEvent.details} onChangeText={(t) => setNewEvent({ ...newEvent, details: t })}/>
+      {/* CREATE EVENTS — visible ONLY if adminMode === true */}
+      {adminMode && (
+        <>
+          <Text style={styles.sectionTitle}>Create Event</Text>
 
-      <TouchableOpacity style={styles.buttonBlack} onPress={createEvent}>
-        <Text style={styles.buttonText}>Create Event</Text>
-      </TouchableOpacity>
+          <TextInput style={styles.input} placeholder="Frat" value={newEvent.frat} onChangeText={(t) => setNewEvent({ ...newEvent, frat: t })}/>
+          <TextInput style={styles.input} placeholder="Date" value={newEvent.date} onChangeText={(t) => setNewEvent({ ...newEvent, date: t })}/>
+          <TextInput style={styles.input} placeholder="Time" value={newEvent.time} onChangeText={(t) => setNewEvent({ ...newEvent, time: t })}/>
+          <TextInput style={styles.input} placeholder="Details" value={newEvent.details} onChangeText={(t) => setNewEvent({ ...newEvent, details: t })}/>
+
+          <TouchableOpacity style={styles.buttonBlack} onPress={createEvent}>
+            <Text style={styles.buttonText}>Create Event</Text>
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }
