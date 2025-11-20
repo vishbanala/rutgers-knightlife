@@ -1,14 +1,22 @@
 import { Link, Stack } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
-const BACKEND_URL = "http://10.75.248.15:8081/api/events";
-const ADMIN_KEY = "RUTGERS_SECRET_2025";  // MUST MATCH BACKEND
+// ---- SUPABASE CONFIG ----
+const SUPABASE_URL = "https://dlplpqxixmzupgtbwqen.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRscGxwcXhpeG16dXBndGJ3cWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MDk1NjUsImV4cCI6MjA3OTE4NTU2NX0.BcrXNNc3l9WzAuzGO8EFWe54zBwsOsdHKNje__mbwzw";
+
+// ---- SIMPLE ADMIN LOGIN ----
+// Only YOU know this password
+const ADMIN_PASSWORD = "RUTGERS_SECRET_2025";
+
+import { createClient } from "@supabase/supabase-js";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export default function EventsScreen() {
   const [events, setEvents] = useState([]);
-  const [adminMode, setAdminMode] = useState(false); // ⬅ NEW
-  const [tempKey, setTempKey] = useState(""); // ⬅ NEW
+  const [admin, setAdmin] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
 
   const [newEvent, setNewEvent] = useState({
     frat: "",
@@ -17,59 +25,61 @@ export default function EventsScreen() {
     details: "",
   });
 
-  // GET events
+  // LOAD EVENTS ON START
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  // ------------------------
+  // FETCH EVENTS (Public)
+  // ------------------------
   const fetchEvents = async () => {
-    try {
-      const res = await fetch(BACKEND_URL);
-      const data = await res.json();
-      setEvents(data);
-    } catch (err) {
-      console.error(err);
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .order("id", { ascending: false });
+
+    if (error) console.log("Fetch error:", error);
+    else setEvents(data);
+  };
+
+  // ------------------------
+  // ADMIN LOGIN
+  // ------------------------
+  const tryLogin = () => {
+    if (passwordInput === ADMIN_PASSWORD) {
+      setAdmin(true);
+      alert("Admin mode activated");
+    } else {
+      alert("Incorrect password");
     }
   };
 
-  // POST event (admin only)
+  // ------------------------
+  // CREATE EVENT (Admin)
+  // ------------------------
   const createEvent = async () => {
-    try {
-      await fetch(BACKEND_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-key": ADMIN_KEY,
-        },
-        body: JSON.stringify(newEvent),
-      });
+    if (!admin) return alert("Not authorized");
 
+    const { error } = await supabase.from("events").insert([newEvent]);
+
+    if (error) console.log("Create error:", error);
+    else {
       setNewEvent({ frat: "", date: "", time: "", details: "" });
       fetchEvents();
-    } catch (err) {
-      console.error(err);
     }
   };
 
-  // DELETE event (admin only)
+  // ------------------------
+  // DELETE EVENT (Admin)
+  // ------------------------
   const deleteEvent = async (id) => {
-    try {
-      await fetch(`${BACKEND_URL}/${id}`, {
-        method: "DELETE",
-        headers: {
-          "x-admin-key": ADMIN_KEY,
-        },
-      });
+    if (!admin) return alert("Not authorized");
 
-      fetchEvents();
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    const { error } = await supabase.from("events").delete().eq("id", id);
 
-  /* 🔐 ADMIN LOGIN — unlock admin mode */
-  const tryLogin = () => {
-    if (tempKey === ADMIN_KEY) {
-      setAdminMode(true);
-    } else {
-      alert("Wrong admin key");
-    }
+    if (error) console.log("Delete error:", error);
+    else fetchEvents();
   };
 
   return (
@@ -77,13 +87,11 @@ export default function EventsScreen() {
       <Stack.Screen options={{ title: "Events" }} />
 
       {/* Back to Home */}
-      <Link href="/" style={styles.backLink}>
-        ← Back to Home
-      </Link>
+      <Link href="/" style={styles.backLink}>← Back to Home</Link>
 
-      {/* Load events */}
+      {/* Always show events */}
       <TouchableOpacity style={styles.buttonRed} onPress={fetchEvents}>
-        <Text style={styles.buttonText}>Load Events</Text>
+        <Text style={styles.buttonText}>Refresh Events</Text>
       </TouchableOpacity>
 
       {/* EVENT LIST */}
@@ -96,8 +104,7 @@ export default function EventsScreen() {
             <Text style={styles.eventInfo}>{item.date} @ {item.time}</Text>
             <Text style={styles.eventDetails}>{item.details}</Text>
 
-            {/* DELETE ONLY IN ADMIN MODE */}
-            {adminMode && (
+            {admin && (
               <TouchableOpacity
                 onPress={() => deleteEvent(item.id)}
                 style={styles.deleteBtn}
@@ -109,32 +116,52 @@ export default function EventsScreen() {
         )}
       />
 
-      {/* 🔐 ADMIN LOGIN SECTION (only visible when NOT logged in) */}
-      {!adminMode && (
-        <View style={{ marginTop: 20 }}>
+      {/* ADMIN LOGIN SECTION */}
+      {!admin && (
+        <>
           <Text style={styles.sectionTitle}>Admin Login</Text>
           <TextInput
             style={styles.input}
-            secureTextEntry={true}
-            placeholder="Enter admin key"
-            value={tempKey}
-            onChangeText={setTempKey}
+            placeholder="Password"
+            secureTextEntry
+            value={passwordInput}
+            onChangeText={setPasswordInput}
           />
           <TouchableOpacity style={styles.buttonBlack} onPress={tryLogin}>
-            <Text style={styles.buttonText}>Unlock Admin</Text>
+            <Text style={styles.buttonText}>Enter Admin Mode</Text>
           </TouchableOpacity>
-        </View>
+        </>
       )}
 
-      {/* CREATE EVENTS — visible ONLY if adminMode === true */}
-      {adminMode && (
+      {/* CREATE EVENT (ADMIN ONLY) */}
+      {admin && (
         <>
           <Text style={styles.sectionTitle}>Create Event</Text>
 
-          <TextInput style={styles.input} placeholder="Frat" value={newEvent.frat} onChangeText={(t) => setNewEvent({ ...newEvent, frat: t })}/>
-          <TextInput style={styles.input} placeholder="Date" value={newEvent.date} onChangeText={(t) => setNewEvent({ ...newEvent, date: t })}/>
-          <TextInput style={styles.input} placeholder="Time" value={newEvent.time} onChangeText={(t) => setNewEvent({ ...newEvent, time: t })}/>
-          <TextInput style={styles.input} placeholder="Details" value={newEvent.details} onChangeText={(t) => setNewEvent({ ...newEvent, details: t })}/>
+          <TextInput
+            style={styles.input}
+            placeholder="Frat"
+            value={newEvent.frat}
+            onChangeText={(t) => setNewEvent({ ...newEvent, frat: t })}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Date"
+            value={newEvent.date}
+            onChangeText={(t) => setNewEvent({ ...newEvent, date: t })}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Time"
+            value={newEvent.time}
+            onChangeText={(t) => setNewEvent({ ...newEvent, time: t })}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Details"
+            value={newEvent.details}
+            onChangeText={(t) => setNewEvent({ ...newEvent, details: t })}
+          />
 
           <TouchableOpacity style={styles.buttonBlack} onPress={createEvent}>
             <Text style={styles.buttonText}>Create Event</Text>
@@ -145,6 +172,10 @@ export default function EventsScreen() {
   );
 }
 
+//
+// ----------------------
+// STYLES
+// ----------------------
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#F5F5F5" },
 
