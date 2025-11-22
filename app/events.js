@@ -1,6 +1,6 @@
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { FlatList, Platform, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 // ---- SUPABASE CONFIG ----
 const SUPABASE_URL = "https://dlplpqxixmzupgtbwqen.supabase.co";
@@ -20,6 +20,7 @@ export default function EventsScreen() {
   const [adminMode, setAdminMode] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [showAdminUI, setShowAdminUI] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Get URL search params from Expo Router
   const params = useLocalSearchParams();
@@ -87,6 +88,7 @@ export default function EventsScreen() {
   // FETCH EVENTS (Public)
   // ------------------------
   const fetchEvents = async () => {
+    setRefreshing(true);
     const { data, error } = await supabase
       .from("events")
       .select("*")
@@ -94,6 +96,7 @@ export default function EventsScreen() {
 
     if (error) console.log("Fetch error:", error);
     else setEvents(data);
+    setRefreshing(false);
   };
 
   // --------------------------------------
@@ -155,95 +158,136 @@ export default function EventsScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ title: "Events" }} />
 
-      {/* Hidden Admin Mode trigger */}
-      <Text
-        style={styles.hiddenTapTitle}
-        onPress={handleSecretTap}
-      >
-        Rutgers KnightLife Events
-      </Text>
-
-      {/* Back button */}
-      <Link href="/" style={styles.backLink}>← Back to Home</Link>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text
+          style={styles.hiddenTapTitle}
+          onPress={handleSecretTap}
+        >
+          ⚡ Rutgers KnightLife Events
+        </Text>
+        <Link href="/" asChild>
+          <TouchableOpacity style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Home</Text>
+          </TouchableOpacity>
+        </Link>
+      </View>
 
       {/* Refresh Events */}
-      <TouchableOpacity style={styles.buttonRed} onPress={fetchEvents}>
+      <TouchableOpacity 
+        style={styles.buttonRed} 
+        onPress={fetchEvents}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.refreshIcon}>🔄</Text>
         <Text style={styles.buttonText}>Refresh Events</Text>
       </TouchableOpacity>
 
       {/* EVENT LIST */}
-      <FlatList
-        data={events}
-        keyExtractor={(item) => item.id?.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.eventCard}>
-            <Text style={styles.eventFrat}>{item.frat}</Text>
-            <Text style={styles.eventInfo}>{item.date} @ {item.time}</Text>
-            <Text style={styles.eventDetails}>{item.details}</Text>
-
-            {adminMode && (
-              <TouchableOpacity
-                onPress={() => deleteEvent(item.id)}
-                style={styles.deleteBtn}
-              >
-                <Text style={styles.deleteText}>Delete</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      />
+      {events.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyEmoji}>📅</Text>
+          <Text style={styles.emptyText}>No events yet</Text>
+          <Text style={styles.emptySubtext}>Check back later for upcoming events!</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={events}
+          keyExtractor={(item) => item.id?.toString()}
+          renderItem={({ item }) => (
+            <View style={styles.eventCard}>
+              <View style={styles.eventHeader}>
+                <Text style={styles.eventFrat}>🎉 {item.frat}</Text>
+                {adminMode && (
+                  <TouchableOpacity
+                    onPress={() => deleteEvent(item.id)}
+                    style={styles.deleteBtn}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.deleteText}>🗑️</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View style={styles.eventTimeRow}>
+                <Text style={styles.eventDateIcon}>📅</Text>
+                <Text style={styles.eventInfo}>{item.date} @ {item.time}</Text>
+              </View>
+              <Text style={styles.eventDetails}>{item.details}</Text>
+            </View>
+          )}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={fetchEvents} />
+          }
+          contentContainerStyle={styles.listContent}
+        />
+      )}
 
       {/* ADMIN LOGIN (only visible if adminMode has NOT been unlocked yet AND showAdminUI is true) */}
       {!adminMode && showAdminUI && (
-        <>
-          <Text style={styles.sectionTitle}>Admin Login</Text>
+        <View style={styles.adminSection}>
+          <Text style={styles.sectionTitle}>🔐 Admin Login</Text>
           <TextInput
             style={styles.input}
-            placeholder="Admin Password"
+            placeholder="Enter Admin Password"
+            placeholderTextColor="#999"
             secureTextEntry
             value={passwordInput}
             onChangeText={setPasswordInput}
           />
-          <TouchableOpacity style={styles.buttonBlack} onPress={tryLogin}>
+          <TouchableOpacity 
+            style={styles.buttonBlack} 
+            onPress={tryLogin}
+            activeOpacity={0.8}
+          >
             <Text style={styles.buttonText}>Unlock Admin</Text>
           </TouchableOpacity>
-        </>
+        </View>
       )}
 
       {/* CREATE EVENT (only visible in admin mode) */}
       {adminMode && (
-        <>
-          <Text style={styles.sectionTitle}>Create Event</Text>
+        <View style={styles.adminSection}>
+          <Text style={styles.sectionTitle}>✨ Create New Event</Text>
 
           <TextInput
             style={styles.input}
-            placeholder="Frat"
+            placeholder="Frat Name"
+            placeholderTextColor="#999"
             value={newEvent.frat}
             onChangeText={(t) => setNewEvent({ ...newEvent, frat: t })}
           />
           <TextInput
             style={styles.input}
-            placeholder="Date"
+            placeholder="Date (e.g., Friday, Jan 15)"
+            placeholderTextColor="#999"
             value={newEvent.date}
             onChangeText={(t) => setNewEvent({ ...newEvent, date: t })}
           />
           <TextInput
             style={styles.input}
-            placeholder="Time"
+            placeholder="Time (e.g., 9:00 PM)"
+            placeholderTextColor="#999"
             value={newEvent.time}
             onChangeText={(t) => setNewEvent({ ...newEvent, time: t })}
           />
           <TextInput
-            style={styles.input}
-            placeholder="Details"
+            style={[styles.input, styles.inputMultiline]}
+            placeholder="Event Details"
+            placeholderTextColor="#999"
+            multiline
+            numberOfLines={3}
             value={newEvent.details}
             onChangeText={(t) => setNewEvent({ ...newEvent, details: t })}
           />
 
-          <TouchableOpacity style={styles.buttonBlack} onPress={createEvent}>
-            <Text style={styles.buttonText}>Create Event</Text>
+          <TouchableOpacity 
+            style={styles.buttonBlack} 
+            onPress={createEvent}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.buttonText}>+ Create Event</Text>
           </TouchableOpacity>
-        </>
+        </View>
       )}
     </View>
   );
@@ -254,68 +298,202 @@ export default function EventsScreen() {
 // STYLES
 // ----------------------
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#F5F5F5" },
-
-  hiddenTapTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 10,
-    color: "#CC0033",
+  container: { 
+    flex: 1, 
+    padding: 20, 
+    backgroundColor: "#FFFFFF" 
   },
 
-  backLink: { fontSize: 18, color: "#CC0033", fontWeight: "bold", marginBottom: 15 },
+  header: {
+    marginBottom: 20,
+    alignItems: "center",
+  },
+
+  hiddenTapTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 12,
+    color: "#CC0033",
+    letterSpacing: -0.5,
+  },
+
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: "#F5F5F5",
+    alignSelf: "flex-start",
+  },
+
+  backButtonText: {
+    fontSize: 14,
+    color: "#CC0033",
+    fontWeight: "600",
+  },
 
   buttonRed: {
     backgroundColor: "#CC0033",
-    padding: 14,
-    borderRadius: 10,
+    padding: 16,
+    borderRadius: 14,
     marginBottom: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#CC0033",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 5,
   },
+
+  refreshIcon: {
+    fontSize: 18,
+  },
+
   buttonBlack: {
-    backgroundColor: "#000",
-    padding: 14,
-    borderRadius: 10,
+    backgroundColor: "#000000",
+    padding: 16,
+    borderRadius: 14,
     marginTop: 10,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
   },
-  buttonText: { color: "#FFF", textAlign: "center", fontSize: 18, fontWeight: "bold" },
+
+  buttonText: { 
+    color: "#FFF", 
+    textAlign: "center", 
+    fontSize: 17, 
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+
+  listContent: {
+    paddingBottom: 20,
+  },
+
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+  },
+
+  emptyEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+
+  emptyText: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#333",
+    marginBottom: 8,
+  },
+
+  emptySubtext: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+  },
 
   eventCard: {
-    backgroundColor: "#FFF",
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 6,
-    borderLeftColor: "#CC0033",
-    marginBottom: 14,
-    position: "relative",
+    backgroundColor: "#FFFFFF",
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  eventHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+
+  eventFrat: { 
+    fontSize: 22, 
+    fontWeight: "800", 
+    color: "#CC0033",
+    flex: 1,
+    letterSpacing: -0.3,
   },
 
   deleteBtn: {
-    position: "absolute",
-    right: 12,
-    top: 10,
-    padding: 6,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#FFF5F5",
   },
 
-  deleteText: { color: "red", fontWeight: "bold", fontSize: 16 },
+  deleteText: { 
+    fontSize: 20,
+  },
 
-  eventFrat: { fontSize: 20, fontWeight: "bold", color: "#CC0033" },
-  eventInfo: { color: "#333" },
-  eventDetails: { color: "#555", marginTop: 6 },
+  eventTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  eventDateIcon: {
+    fontSize: 16,
+  },
+
+  eventInfo: { 
+    fontSize: 15,
+    color: "#666",
+    fontWeight: "600",
+  },
+
+  eventDetails: { 
+    fontSize: 15,
+    color: "#333",
+    lineHeight: 22,
+  },
+
+  adminSection: {
+    marginTop: 24,
+    padding: 20,
+    backgroundColor: "#F9F9F9",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+  },
 
   input: {
-    backgroundColor: "#FFF",
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#DDD",
-    marginBottom: 10,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#E0E0E0",
+    marginBottom: 12,
+    fontSize: 16,
+    color: "#333",
+  },
+
+  inputMultiline: {
+    minHeight: 80,
+    textAlignVertical: "top",
+    paddingTop: 16,
   },
 
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginVertical: 10,
+    fontSize: 24,
+    fontWeight: "800",
+    marginBottom: 16,
     color: "#CC0033",
+    letterSpacing: -0.5,
   },
 });
