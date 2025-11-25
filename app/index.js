@@ -5,7 +5,6 @@ export default function Home() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.emoji}>⚡</Text>
         <Text style={styles.title}>Rutgers</Text>
         <Text style={styles.subtitle}>KnightLife</Text>
         <Text style={styles.tagline}>Your Night, Your Way</Text>

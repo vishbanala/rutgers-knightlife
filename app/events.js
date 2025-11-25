@@ -164,7 +164,7 @@ export default function EventsScreen() {
           style={styles.hiddenTapTitle}
           onPress={handleSecretTap}
         >
-          ⚡ Rutgers KnightLife Events
+          Rutgers KnightLife Events
         </Text>
         <Link href="/" asChild>
           <TouchableOpacity style={styles.backButton}>
