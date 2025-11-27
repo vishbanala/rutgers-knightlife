@@ -1,11 +1,13 @@
 {
   "expo": {
-    "name": "RutgersNew",
+    "name": "Rutgers KnightLife",
     "slug": "RutgersNew",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
+    "description": "Discover fraternity events and information at Rutgers University. Your night, your way.",
+    "privacy": "public",
     "extra": {
       "eas": {
         "projectId": "95ecb139-6b4d-4008-bd4e-78116b097aff"
@@ -17,10 +19,16 @@
       "backgroundColor": "#FFFFFF"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.vishbanala.knightlife",
+      "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "This app does not require location access.",
+        "NSCameraUsageDescription": "This app does not require camera access."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
