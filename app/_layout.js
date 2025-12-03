@@ -4,7 +4,7 @@ import "react-native-gesture-handler";
 
 import { Stack } from "expo-router";
 import { ErrorBoundary } from "react-error-boundary";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 // Global error handler - wrapped in try-catch to prevent crashes
@@ -68,7 +68,45 @@ function ErrorFallback({ error, resetErrorBoundary }) {
 }
 
 export default function RootLayout() {
+  const [isBridgeReady, setIsBridgeReady] = useState(false);
+
   useEffect(() => {
+    // CRITICAL: Wait for React Native bridge to be fully ready
+    // TurboModules crash if called before bridge is initialized (crash at ~770ms)
+    // We wait 3+ seconds to be absolutely safe
+    const waitForBridge = async () => {
+      try {
+        // Wait 3 seconds minimum - crash happens at 770ms, so this should be safe
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Additional safety: try to verify bridge is ready (but don't crash if it fails)
+        try {
+          // Use dynamic import to avoid top-level require
+          const ReactNative = await import("react-native");
+          if (ReactNative && ReactNative.NativeModules) {
+            const moduleCount = Object.keys(ReactNative.NativeModules || {}).length;
+            if (moduleCount > 10) {
+              // Bridge seems ready (has many modules registered)
+              setIsBridgeReady(true);
+              return;
+            }
+          }
+        } catch (e) {
+          // If check fails, that's OK - we'll use the delay-based approach
+          console.log("Bridge check failed (this is OK):", e);
+        }
+        
+        // Always set ready after delay - don't hang the app
+        setIsBridgeReady(true);
+      } catch (e) {
+        console.error("Error waiting for bridge:", e);
+        // Still set ready to prevent app from hanging
+        setIsBridgeReady(true);
+      }
+    };
+
+    waitForBridge();
+
     // Catch any unhandled promise rejections (web only)
     try {
       if (typeof window !== "undefined" && window.addEventListener) {
@@ -91,6 +129,15 @@ export default function RootLayout() {
       console.log("Error setting up rejection handler:", e);
     }
   }, []);
+
+  // Don't render until bridge is ready to prevent TurboModule crashes
+  if (!isBridgeReady) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <ErrorBoundary 
