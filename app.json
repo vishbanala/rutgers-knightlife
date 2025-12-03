@@ -7,9 +7,8 @@
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
     "description": "Discover fraternity events and information at Rutgers University. Your night, your way.",
-    "privacy": "public",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
