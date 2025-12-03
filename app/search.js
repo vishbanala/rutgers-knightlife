@@ -1,8 +1,4 @@
-// ---------------------------
-// SUPABASE CONFIG (React Native safe)
-// ---------------------------
-// NO TOP-LEVEL IMPORTS - Everything loaded dynamically
-import { Link, Stack, useLocalSearchParams } from "expo-router";
+import { Link, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
@@ -14,20 +10,16 @@ import {
   View,
 } from "react-native";
 
-// ---------------------------
-// ADMIN CONFIG
-// ---------------------------
 const ADMIN_PASSWORD = "RUTGERS_SECRET_2025";
 const ADMIN_SECRET_KEY = "RUTGERS_ADMIN_2025";
 
-function SearchScreenContent() {
+export default function SearchScreen() {
   const [frats, setFrats] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [adminMode, setAdminMode] = useState(false);
   const [showAdminUI, setShowAdminUI] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const [isReady, setIsReady] = useState(false);
   const [newFrat, setNewFrat] = useState({
     name: "",
     abbreviation: "",
@@ -35,189 +27,85 @@ function SearchScreenContent() {
     details: "",
   });
 
-  // Hooks MUST be called unconditionally - can't wrap in try-catch
   const params = useLocalSearchParams();
 
-  // ---------------------------
-  // FETCH FRATS - Defined first with useCallback
-  // ---------------------------
   const fetchFrats = useCallback(async () => {
-    let refreshingSet = false;
     try {
-      try {
-        setRefreshing(true);
-        refreshingSet = true;
-      } catch (e) {
-        // Component might be unmounting
-        return;
-      }
-      
-      // Dynamically import Supabase functions - NO top-level import
-      let supabase = null;
-      try {
-        const supabaseModule = await import("../lib/supabase");
-        const getSupabaseClient = supabaseModule.getSupabaseClient;
-        const initSupabaseClient = supabaseModule.initSupabaseClient;
-        
-        supabase = getSupabaseClient();
-        if (!supabase) {
-          supabase = await initSupabaseClient();
-        }
-      } catch (initErr) {
-        console.log("Supabase unavailable:", initErr);
-        // Continue without Supabase - show empty state
-      }
-      
+      setRefreshing(true);
+
+      const supabaseModule = await import("../lib/supabase");
+      let supabase = supabaseModule.getSupabaseClient();
       if (!supabase) {
-        console.log("No database connection - showing empty state");
+        supabase = await supabaseModule.initSupabaseClient();
+      }
+
+      if (!supabase) {
         setFrats([]);
         return;
       }
 
-      // Make the query with timeout protection
-      let queryResult = null;
-      try {
-        const queryPromise = supabase
-          .from("frats")
-          .select("*")
-          .order("name");
-
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Query timeout")), 10000)
-        );
-
-        queryResult = await Promise.race([queryPromise, timeoutPromise]).catch(err => {
-          console.log("Query failed:", err);
-          return { data: null, error: err };
-        });
-      } catch (queryErr) {
-        console.log("Query error:", queryErr);
-        queryResult = { data: null, error: queryErr };
-      }
-
-      const { data, error } = queryResult || { data: null, error: new Error("No result") };
+      const { data, error } = await supabase
+        .from("frats")
+        .select("*")
+        .order("name");
 
       if (error) {
-        console.log("Fetch frats error:", error);
+        console.log("Fetch error:", error);
         setFrats([]);
         return;
       }
-      
-      // Ensure data is always an array and filter invalid items
+
       if (Array.isArray(data)) {
-        const validData = data.filter(item => item && typeof item === "object");
-        setFrats(validData);
+        setFrats(data.filter(item => item && typeof item === "object"));
       } else {
         setFrats([]);
       }
     } catch (err) {
-      console.log("Unexpected error fetching frats:", err);
+      console.log("Error fetching frats:", err);
       setFrats([]);
     } finally {
-      if (refreshingSet) {
-        try {
-          setRefreshing(false);
-        } catch (e) {
-          // Ignore
-        }
-      }
+      setRefreshing(false);
     }
   }, []);
 
-  // ---------------------------
-  // LOAD FRATS - Delayed initialization
-  // ---------------------------
   useEffect(() => {
-    let mounted = true;
-    let cancelled = false;
-    
-    // Set ready immediately - don't wait for Supabase
-    setIsReady(true);
-    
-    // TEMPORARILY DISABLED: Initialize and load data after a longer delay
-    // This helps isolate if Supabase is causing the crash
-    const initAndLoad = async () => {
-      try {
-        // Wait MUCH longer to ensure React Native is completely ready
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        if (cancelled || !mounted) return;
-        
-        // TEMPORARILY DISABLED: Don't initialize Supabase on startup
-        // Uncomment this after confirming app doesn't crash without it
-        /*
-        try {
-          const supabaseModule = await import("../lib/supabase");
-          const initSupabaseClient = supabaseModule.initSupabaseClient;
-          await initSupabaseClient();
-        } catch (initErr) {
-          console.log("Supabase init failed, continuing without it:", initErr);
-        }
-        
-        if (cancelled || !mounted) return;
-        
-        // Additional delay before fetching
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        if (!cancelled && mounted) {
-          fetchFrats();
-        }
-        */
-      } catch (err) {
-        console.log("Error in initial load:", err);
-      }
-    };
-    
-    initAndLoad();
-    
-    return () => {
-      cancelled = true;
-      mounted = false;
-    };
-  }, [fetchFrats]);
+    const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+    if (isDev) {
+      setShowAdminUI(true);
+    } else if (params?.admin_key === ADMIN_SECRET_KEY) {
+      setShowAdminUI(true);
+    }
 
-  const toggleExpanded = (id) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
+    const timer = setTimeout(() => {
+      fetchFrats();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [params, fetchFrats]);
 
   const tryLogin = () => {
-    try {
-      if (passwordInput === ADMIN_PASSWORD) {
-        setAdminMode(true);
-        if (typeof alert !== "undefined") alert("Admin access granted");
-      } else {
-        if (typeof alert !== "undefined") alert("Wrong password");
-      }
-    } catch (err) {
-      console.log("Error in tryLogin:", err);
+    if (passwordInput === ADMIN_PASSWORD) {
+      setAdminMode(true);
+      if (typeof alert !== "undefined") alert("Admin access granted");
+    } else {
+      if (typeof alert !== "undefined") alert("Wrong password");
     }
   };
 
   const createFrat = useCallback(async () => {
+    if (!adminMode) return;
+    if (!newFrat.name || !newFrat.abbreviation || !newFrat.address) {
+      if (typeof alert !== "undefined") alert("Please fill out name, abbreviation, and address");
+      return;
+    }
+
     try {
-      if (!adminMode) {
-        if (typeof alert !== "undefined") alert("Unauthorized");
-        return;
-      }
-      if (!newFrat.name || !newFrat.abbreviation || !newFrat.address) {
-        if (typeof alert !== "undefined") alert("Please fill out name, abbreviation, and address");
-        return;
+      const supabaseModule = await import("../lib/supabase");
+      let supabase = supabaseModule.getSupabaseClient();
+      if (!supabase) {
+        supabase = await supabaseModule.initSupabaseClient();
       }
 
-      let supabase = null;
-      try {
-        const supabaseModule = await import("../lib/supabase");
-        const getSupabaseClient = supabaseModule.getSupabaseClient;
-        const initSupabaseClient = supabaseModule.initSupabaseClient;
-        
-        supabase = getSupabaseClient();
-        if (!supabase) {
-          supabase = await initSupabaseClient();
-        }
-      } catch (initErr) {
-        console.log("Supabase init error:", initErr);
-      }
-      
       if (!supabase) {
         if (typeof alert !== "undefined") alert("Database connection error");
         return;
@@ -226,45 +114,29 @@ function SearchScreenContent() {
       const { error } = await supabase.from("frats").insert([newFrat]);
 
       if (error) {
-        console.log("Create frat error:", error);
         if (typeof alert !== "undefined") {
-          alert("Error adding frat: " + (error.message || "Unknown error"));
+          alert("Error: " + (error.message || "Unknown error"));
         }
       } else {
         setNewFrat({ name: "", abbreviation: "", address: "", details: "" });
         fetchFrats();
       }
     } catch (err) {
-      console.log("Unexpected error creating frat:", err);
-      if (typeof alert !== "undefined") alert("Unexpected error occurred");
+      console.log("Error creating frat:", err);
+      if (typeof alert !== "undefined") alert("Error occurred");
     }
   }, [adminMode, newFrat, fetchFrats]);
 
   const deleteFrat = useCallback(async (id) => {
+    if (!adminMode || !id) return;
+
     try {
-      if (!adminMode) {
-        if (typeof alert !== "undefined") alert("Unauthorized");
-        return;
-      }
-      if (!id) {
-        if (typeof alert !== "undefined") alert("Invalid frat ID");
-        return;
+      const supabaseModule = await import("../lib/supabase");
+      let supabase = supabaseModule.getSupabaseClient();
+      if (!supabase) {
+        supabase = await supabaseModule.initSupabaseClient();
       }
 
-      let supabase = null;
-      try {
-        const supabaseModule = await import("../lib/supabase");
-        const getSupabaseClient = supabaseModule.getSupabaseClient;
-        const initSupabaseClient = supabaseModule.initSupabaseClient;
-        
-        supabase = getSupabaseClient();
-        if (!supabase) {
-          supabase = await initSupabaseClient();
-        }
-      } catch (initErr) {
-        console.log("Supabase init error:", initErr);
-      }
-      
       if (!supabase) {
         if (typeof alert !== "undefined") alert("Database connection error");
         return;
@@ -272,143 +144,68 @@ function SearchScreenContent() {
 
       const { error } = await supabase.from("frats").delete().eq("id", id);
 
-      if (error) {
-        console.log("Delete frat error:", error);
-        if (typeof alert !== "undefined") {
-          alert("Error deleting frat: " + (error.message || "Unknown error"));
-        }
-      } else {
+      if (!error) {
         fetchFrats();
       }
     } catch (err) {
-      console.log("Unexpected error deleting frat:", err);
-      if (typeof alert !== "undefined") alert("Unexpected error occurred");
+      console.log("Error deleting frat:", err);
     }
   }, [adminMode, fetchFrats]);
 
-  const renderFratCard = useCallback(({ item }) => {
-    try {
-      if (!item || typeof item !== "object" || !item.id) return null;
-      const isExpanded = expandedId === item.id;
-      return (
-        <TouchableOpacity
-          style={styles.fratCard}
-          activeOpacity={0.9}
-          onPress={() => {
-            try {
-              toggleExpanded(item.id);
-            } catch (e) {
-              console.log("Error toggling:", e);
-            }
-          }}
-        >
-          <View style={styles.fratHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fratName}>{item.name || "Unknown"}</Text>
-              <Text style={styles.fratAbbrev}>Known as {item.abbreviation || "N/A"}</Text>
-            </View>
-            <Text style={styles.chevron}>{isExpanded ? "▲" : "▼"}</Text>
-          </View>
-
-          <View style={styles.addressRow}>
-            <Text style={styles.addressIcon}>📍</Text>
-            <Text style={styles.addressText}>{item.address || "Address not provided"}</Text>
-          </View>
-
-          {isExpanded && (
-            <>
-              {item.details ? (
-                <Text style={styles.fratDetails}>{item.details}</Text>
-              ) : (
-                <Text style={styles.fratDetailsMuted}>
-                  No extra details provided yet
-                </Text>
-              )}
-
-              {adminMode && item.id && (
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => {
-                    try {
-                      deleteFrat(item.id);
-                    } catch (e) {
-                      console.log("Error deleting:", e);
-                    }
-                  }}
-                >
-                  <Text style={styles.deleteText}>Delete</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
-        </TouchableOpacity>
-      );
-    } catch (e) {
-      console.log("Error rendering frat card:", e);
-      return null;
-    }
-  }, [expandedId, adminMode, deleteFrat]);
-
-  // Don't render until ready to prevent crashes
-  if (!isReady) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>Loading...</Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      {(() => {
-        try {
-          return <Stack.Screen options={{ title: "Search Frats" }} />;
-        } catch (e) {
-          return null;
-        }
-      })()}
-
       <Text style={styles.pageTitle}>Rutgers Fraternity Directory</Text>
-      <Text style={styles.pageSubtitle}>
-        Tap a frat to see their address and details
-      </Text>
+      <Text style={styles.pageSubtitle}>Tap a frat to see their address and details</Text>
 
-      {!Array.isArray(frats) || frats.length === 0 ? (
+      {frats.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyEmoji}>🏡</Text>
           <Text style={styles.emptyTitle}>No frats added yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Admins can add frats from the console below.
-          </Text>
         </View>
       ) : (
         <FlatList
-          data={Array.isArray(frats) ? frats : []}
-          keyExtractor={(item, index) => {
-            try {
-              if (item && item.id) {
-                return String(item.id);
-              }
-              return `frat-${index}`;
-            } catch (e) {
-              return `frat-fallback-${index}`;
-            }
+          data={frats}
+          keyExtractor={(item, index) => String(item?.id || index)}
+          renderItem={({ item }) => {
+            const isExpanded = expandedId === item.id;
+            return (
+              <TouchableOpacity
+                style={styles.fratCard}
+                activeOpacity={0.9}
+                onPress={() => setExpandedId(isExpanded ? null : item.id)}
+              >
+                <View style={styles.fratHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fratName}>{item.name || "Unknown"}</Text>
+                    <Text style={styles.fratAbbrev}>Known as {item.abbreviation || "N/A"}</Text>
+                  </View>
+                  <Text style={styles.chevron}>{isExpanded ? "▲" : "▼"}</Text>
+                </View>
+
+                <View style={styles.addressRow}>
+                  <Text style={styles.addressIcon}>📍</Text>
+                  <Text style={styles.addressText}>{item.address || "Address not provided"}</Text>
+                </View>
+
+                {isExpanded && (
+                  <>
+                    {item.details ? (
+                      <Text style={styles.fratDetails}>{item.details}</Text>
+                    ) : (
+                      <Text style={styles.fratDetailsMuted}>No extra details provided yet</Text>
+                    )}
+
+                    {adminMode && item.id && (
+                      <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteFrat(item.id)}>
+                        <Text style={styles.deleteText}>Delete</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+              </TouchableOpacity>
+            );
           }}
-          renderItem={renderFratCard}
-          refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
-              onRefresh={() => {
-                try {
-                  fetchFrats();
-                } catch (e) {
-                  console.log("Error refreshing:", e);
-                }
-              }} 
-            />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchFrats} />}
           contentContainerStyle={{ paddingBottom: 32 }}
         />
       )}
@@ -433,7 +230,6 @@ function SearchScreenContent() {
       {adminMode && (
         <View style={styles.adminSection}>
           <Text style={styles.sectionTitle}>Add New Frat</Text>
-
           <TextInput
             style={styles.input}
             placeholder="Full Name"
@@ -464,39 +260,17 @@ function SearchScreenContent() {
             value={newFrat.details}
             onChangeText={(t) => setNewFrat({ ...newFrat, details: t })}
           />
-
           <TouchableOpacity style={styles.buttonRed} onPress={createFrat}>
             <Text style={styles.buttonText}>+ Add Frat</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {(() => {
-        try {
-          return (
-            <Link href="/" asChild>
-              <TouchableOpacity style={styles.homeButton}>
-                <Text style={styles.homeButtonText}>← Back to Home</Text>
-              </TouchableOpacity>
-            </Link>
-          );
-        } catch (e) {
-          return (
-            <TouchableOpacity 
-              style={styles.homeButton}
-              onPress={() => {
-                try {
-                  console.log("Link failed, using fallback");
-                } catch (err) {
-                  console.log("Navigation error:", err);
-                }
-              }}
-            >
-              <Text style={styles.homeButtonText}>← Back to Home</Text>
-            </TouchableOpacity>
-          );
-        }
-      })()}
+      <Link href="/" asChild>
+        <TouchableOpacity style={styles.homeButton}>
+          <Text style={styles.homeButtonText}>← Back to Home</Text>
+        </TouchableOpacity>
+      </Link>
     </View>
   );
 }
@@ -526,11 +300,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E5E5",
     marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
   },
   fratHeader: {
     flexDirection: "row",
@@ -559,9 +328,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 8,
   },
-  addressIcon: {
-    fontSize: 18,
-  },
+  addressIcon: { fontSize: 18 },
   addressText: {
     fontSize: 15,
     color: "#333",
@@ -605,11 +372,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#333",
     marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: "#777",
-    textAlign: "center",
   },
   adminSection: {
     marginTop: 24,
@@ -672,34 +434,3 @@ const styles = StyleSheet.create({
     color: "#CC0033",
   },
 });
-
-// Error fallback for this screen
-function SearchErrorFallback({ error, resetErrorBoundary }) {
-  return (
-    <View style={styles.container}>
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyTitle}>Error loading frats</Text>
-        <TouchableOpacity 
-          style={styles.buttonBlack} 
-          onPress={resetErrorBoundary}
-        >
-          <Text style={styles.buttonText}>Try Again</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-// Export with error boundary
-export default function SearchScreen() {
-  return (
-    <ErrorBoundary
-      FallbackComponent={SearchErrorFallback}
-      onError={(error, errorInfo) => {
-        console.error("SearchScreen error:", error, errorInfo);
-      }}
-    >
-      <SearchScreenContent />
-    </ErrorBoundary>
-  );
-}

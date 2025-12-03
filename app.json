@@ -39,7 +39,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.vishbanala.rutgersknightlife",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "This app does not require location access.",

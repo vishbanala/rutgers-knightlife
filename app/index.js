@@ -41,10 +41,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 60,
   },
-  emoji: {
-    fontSize: 64,
-    marginBottom: 10,
-  },
   title: {
     fontSize: 42,
     fontWeight: "800",
