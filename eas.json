@@ -19,6 +19,12 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "nitronatium@gmail.com",
+        "ascAppId": "6755852033",
+        "appleTeamId": "822F6MMBGC"
+      }
+    }
   }
 }
