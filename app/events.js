@@ -1,19 +1,41 @@
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { FlatList, Platform, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
 
-// ---- SUPABASE CONFIG ----
+// ---------------------------
+// SUPABASE CONFIG (React Native safe)
+// ---------------------------
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createClient } from "@supabase/supabase-js";
+import "react-native-url-polyfill/auto";
+
 const SUPABASE_URL = "https://dlplpqxixmzupgtbwqen.supabase.co";
 const SUPABASE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRscGxwcXhpeG16dXBndGJ3cWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MDk1NjUsImV4cCI6MjA3OTE4NTU2NX0.BcrXNNc3l9WzAuzGO8EFWe54zBwsOsdHKNje__mbwzw";
 
-// ---- SECRET ADMIN PASSWORD ----
-const ADMIN_PASSWORD = "RUTGERS_SECRET_2025";
-// ---- SECRET KEY TO SHOW ADMIN UI (add ?admin_key=YOUR_SECRET_KEY to URL) ----
-const ADMIN_SECRET_KEY = "RUTGERS_ADMIN_2025";
+// Create Supabase client safe for iOS/Android
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
 
-import { createClient } from "@supabase/supabase-js";
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// ---------------------------
+// ADMIN CONFIG
+// ---------------------------
+const ADMIN_PASSWORD = "RUTGERS_SECRET_2025";
+const ADMIN_SECRET_KEY = "RUTGERS_ADMIN_2025";
 
 export default function EventsScreen() {
   const [events, setEvents] = useState([]);
@@ -22,10 +44,7 @@ export default function EventsScreen() {
   const [showAdminUI, setShowAdminUI] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Get URL search params from Expo Router
   const params = useLocalSearchParams();
-
-  // hidden tap counter
   const [tapCount, setTapCount] = useState(0);
 
   const [newEvent, setNewEvent] = useState({
@@ -35,48 +54,63 @@ export default function EventsScreen() {
     details: "",
   });
 
-  // LOAD EVENTS ON START
+  // ---------------------------
+  // LOAD EVENTS 
+  // ---------------------------
   useEffect(() => {
     fetchEvents();
   }, []);
 
-  // ------------------------
-  // CHECK IF ADMIN UI SHOULD BE SHOWN
-  // In development (Expo): Always show admin UI
-  // In production (deployed): Only show if secret key is in URL
-  // ------------------------
+  const fetchEvents = async () => {
+    try {
+      setRefreshing(true);
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (error) {
+        console.log("Fetch error:", error);
+        setEvents([]); // Set empty array on error to prevent crashes
+        return;
+      }
+      
+      // Ensure data is always an array and has valid structure
+      if (Array.isArray(data)) {
+        setEvents(data);
+      } else {
+        setEvents([]);
+      }
+    } catch (err) {
+      console.log("Unexpected error fetching events:", err);
+      setEvents([]); // Set empty array on error
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // ---------------------------
+  // ADMIN ACCESS CHECK
+  // ---------------------------
   useEffect(() => {
     const checkAdminAccess = () => {
       try {
-        // In development mode (Expo local), always show admin UI
+        // Always show in dev (Expo Go)
         if (__DEV__) {
           setShowAdminUI(true);
           return;
         }
 
-        // In production, check for secret key in URL
-        // Check Expo Router params first (works for web and mobile)
-        const adminKey = params?.admin_key;
-        if (adminKey === ADMIN_SECRET_KEY) {
+        // Check for router param
+        if (params?.admin_key === ADMIN_SECRET_KEY) {
           setShowAdminUI(true);
           return;
         }
 
-        // Fallback: Check window.location for web (in case params don't work)
-        if (Platform.OS === "web" && typeof window !== "undefined") {
-          const urlParams = new URLSearchParams(window.location.search);
-          const urlAdminKey = urlParams.get("admin_key");
-          if (urlAdminKey === ADMIN_SECRET_KEY) {
-            setShowAdminUI(true);
-            return;
-          }
-        }
 
-        // If no valid key found in production, hide admin UI
         setShowAdminUI(false);
-      } catch (error) {
-        console.log("Error checking admin access:", error);
-        // In dev mode, show anyway; in production, hide
+      } catch (e) {
+        console.log("Admin check error:", e);
         setShowAdminUI(__DEV__);
       }
     };
@@ -84,40 +118,26 @@ export default function EventsScreen() {
     checkAdminAccess();
   }, [params]);
 
-  // ------------------------
-  // FETCH EVENTS (Public)
-  // ------------------------
-  const fetchEvents = async () => {
-    setRefreshing(true);
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .order("id", { ascending: false });
-
-    if (error) console.log("Fetch error:", error);
-    else setEvents(data);
-    setRefreshing(false);
-  };
-
-  // --------------------------------------
+  // ---------------------------
   // SECRET TAP TO UNLOCK ADMIN MODE
-  // --------------------------------------
+  // ---------------------------
   const handleSecretTap = () => {
-    const newCount = tapCount + 1;
-    setTapCount(newCount);
+    const count = tapCount + 1;
+    setTapCount(count);
 
-    setTimeout(() => setTapCount(0), 700); // reset taps after 0.7s
+    // Reset after short delay
+    setTimeout(() => setTapCount(0), 700);
 
-    if (newCount >= 5) {
+    if (count >= 5) {
       setAdminMode(true);
       alert("Admin Mode Unlocked");
       setTapCount(0);
     }
   };
 
-  // ------------------------
+  // ---------------------------
   // ADMIN LOGIN
-  // ------------------------
+  // ---------------------------
   const tryLogin = () => {
     if (passwordInput === ADMIN_PASSWORD) {
       alert("Admin access granted");
@@ -127,43 +147,60 @@ export default function EventsScreen() {
     }
   };
 
-  // ------------------------
+  // ---------------------------
   // CREATE EVENT
-  // ------------------------
+  // ---------------------------
   const createEvent = async () => {
-    if (!adminMode) return alert("Unauthorized");
+    try {
+      if (!adminMode) return alert("Unauthorized");
 
-    const { error } = await supabase.from("events").insert([newEvent]);
+      const { error } = await supabase.from("events").insert([newEvent]);
 
-    if (error) console.log("Create error:", error);
-    else {
-      setNewEvent({ frat: "", date: "", time: "", details: "" });
-      fetchEvents();
+      if (error) {
+        console.log("Create error:", error);
+        alert("Error creating event: " + (error.message || "Unknown error"));
+      } else {
+        setNewEvent({ frat: "", date: "", time: "", details: "" });
+        fetchEvents();
+      }
+    } catch (err) {
+      console.log("Unexpected error creating event:", err);
+      alert("Unexpected error occurred");
     }
   };
 
-  // ------------------------
+  // ---------------------------
   // DELETE EVENT
-  // ------------------------
+  // ---------------------------
   const deleteEvent = async (id) => {
-    if (!adminMode) return alert("Unauthorized");
+    try {
+      if (!adminMode) return alert("Unauthorized");
+      if (!id) return alert("Invalid event ID");
 
-    const { error } = await supabase.from("events").delete().eq("id", id);
+      const { error } = await supabase.from("events").delete().eq("id", id);
 
-    if (error) console.log("Delete error:", error);
-    else fetchEvents();
+      if (error) {
+        console.log("Delete error:", error);
+        alert("Error deleting event: " + (error.message || "Unknown error"));
+      } else {
+        fetchEvents();
+      }
+    } catch (err) {
+      console.log("Unexpected error deleting event:", err);
+      alert("Unexpected error occurred");
+    }
   };
 
+  // ---------------------------
+  // UI
+  // ---------------------------
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: "Events" }} />
 
       {/* Header */}
       <View style={styles.header}>
-        <Text
-          style={styles.hiddenTapTitle}
-          onPress={handleSecretTap}
-        >
+        <Text style={styles.hiddenTapTitle} onPress={handleSecretTap}>
           Rutgers KnightLife Events
         </Text>
         <Link href="/" asChild>
@@ -173,7 +210,7 @@ export default function EventsScreen() {
         </Link>
       </View>
 
-      {/* Refresh Events */}
+      {/* Refresh */}
       <TouchableOpacity 
         style={styles.buttonRed} 
         onPress={fetchEvents}
@@ -183,38 +220,45 @@ export default function EventsScreen() {
         <Text style={styles.buttonText}>Refresh Events</Text>
       </TouchableOpacity>
 
-      {/* EVENT LIST */}
+      {/* Event List */}
       {events.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyEmoji}>📅</Text>
           <Text style={styles.emptyText}>No events yet</Text>
-          <Text style={styles.emptySubtext}>Check back later for upcoming events!</Text>
+          <Text style={styles.emptySubtext}>Check back later!</Text>
         </View>
       ) : (
         <FlatList
           data={events}
-          keyExtractor={(item) => item.id?.toString()}
-          renderItem={({ item }) => (
-            <View style={styles.eventCard}>
-              <View style={styles.eventHeader}>
-                <Text style={styles.eventFrat}>🎉 {item.frat}</Text>
-                {adminMode && (
-                  <TouchableOpacity
-                    onPress={() => deleteEvent(item.id)}
-                    style={styles.deleteBtn}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.deleteText}>🗑️</Text>
-                  </TouchableOpacity>
-                )}
+          keyExtractor={(item) => (item?.id || Math.random()).toString()}
+          renderItem={({ item }) => {
+            if (!item) return null;
+            return (
+              <View style={styles.eventCard}>
+                <View style={styles.eventHeader}>
+                  <Text style={styles.eventFrat}>🎉 {item.frat || "Unknown"}</Text>
+
+                  {adminMode && item.id && (
+                    <TouchableOpacity
+                      onPress={() => deleteEvent(item.id)}
+                      style={styles.deleteBtn}
+                    >
+                      <Text style={styles.deleteText}>🗑️</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.eventTimeRow}>
+                  <Text style={styles.eventDateIcon}>📅</Text>
+                  <Text style={styles.eventInfo}>
+                    {item.date || "TBD"} @ {item.time || "TBD"}
+                  </Text>
+                </View>
+
+                <Text style={styles.eventDetails}>{item.details || "No details provided"}</Text>
               </View>
-              <View style={styles.eventTimeRow}>
-                <Text style={styles.eventDateIcon}>📅</Text>
-                <Text style={styles.eventInfo}>{item.date} @ {item.time}</Text>
-              </View>
-              <Text style={styles.eventDetails}>{item.details}</Text>
-            </View>
-          )}
+            );
+          }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={fetchEvents} />
           }
@@ -222,7 +266,7 @@ export default function EventsScreen() {
         />
       )}
 
-      {/* ADMIN LOGIN (only visible if adminMode has NOT been unlocked yet AND showAdminUI is true) */}
+      {/* Admin Login */}
       {!adminMode && showAdminUI && (
         <View style={styles.adminSection}>
           <Text style={styles.sectionTitle}>🔐 Admin Login</Text>
@@ -237,14 +281,13 @@ export default function EventsScreen() {
           <TouchableOpacity 
             style={styles.buttonBlack} 
             onPress={tryLogin}
-            activeOpacity={0.8}
           >
             <Text style={styles.buttonText}>Unlock Admin</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* CREATE EVENT (only visible in admin mode) */}
+      {/* Create Event */}
       {adminMode && (
         <View style={styles.adminSection}>
           <Text style={styles.sectionTitle}>✨ Create New Event</Text>
@@ -283,7 +326,6 @@ export default function EventsScreen() {
           <TouchableOpacity 
             style={styles.buttonBlack} 
             onPress={createEvent}
-            activeOpacity={0.8}
           >
             <Text style={styles.buttonText}>+ Create Event</Text>
           </TouchableOpacity>
@@ -293,16 +335,11 @@ export default function EventsScreen() {
   );
 }
 
-//
 // ----------------------
 // STYLES
 // ----------------------
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    padding: 20, 
-    backgroundColor: "#FFFFFF" 
-  },
+  container: { flex: 1, padding: 20, backgroundColor: "#FFFFFF" },
 
   header: {
     marginBottom: 20,
@@ -341,27 +378,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    shadowColor: "#CC0033",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 5,
   },
 
-  refreshIcon: {
-    fontSize: 18,
-  },
+  refreshIcon: { fontSize: 18 },
 
   buttonBlack: {
     backgroundColor: "#000000",
     padding: 16,
     borderRadius: 14,
     marginTop: 10,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 5,
   },
 
   buttonText: { 
@@ -369,12 +394,9 @@ const styles = StyleSheet.create({
     textAlign: "center", 
     fontSize: 17, 
     fontWeight: "700",
-    letterSpacing: 0.3,
   },
 
-  listContent: {
-    paddingBottom: 20,
-  },
+  listContent: { paddingBottom: 20 },
 
   emptyState: {
     flex: 1,
@@ -383,23 +405,9 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
 
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-
-  emptyText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 8,
-  },
-
-  emptySubtext: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-  },
+  emptyEmoji: { fontSize: 64, marginBottom: 16 },
+  emptyText: { fontSize: 20, fontWeight: "700", color: "#333", marginBottom: 8 },
+  emptySubtext: { fontSize: 14, color: "#666", textAlign: "center" },
 
   eventCard: {
     backgroundColor: "#FFFFFF",
@@ -408,11 +416,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: "#E5E5E5",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
   },
 
   eventHeader: {
@@ -427,7 +430,6 @@ const styles = StyleSheet.create({
     fontWeight: "800", 
     color: "#CC0033",
     flex: 1,
-    letterSpacing: -0.3,
   },
 
   deleteBtn: {
@@ -436,9 +438,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF5F5",
   },
 
-  deleteText: { 
-    fontSize: 20,
-  },
+  deleteText: { fontSize: 20 },
 
   eventTimeRow: {
     flexDirection: "row",
@@ -447,21 +447,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  eventDateIcon: {
-    fontSize: 16,
-  },
-
-  eventInfo: { 
-    fontSize: 15,
-    color: "#666",
-    fontWeight: "600",
-  },
-
-  eventDetails: { 
-    fontSize: 15,
-    color: "#333",
-    lineHeight: 22,
-  },
+  eventDateIcon: { fontSize: 16 },
+  eventInfo: { fontSize: 15, color: "#666", fontWeight: "600" },
+  eventDetails: { fontSize: 15, color: "#333", lineHeight: 22 },
 
   adminSection: {
     marginTop: 24,
@@ -486,7 +474,6 @@ const styles = StyleSheet.create({
   inputMultiline: {
     minHeight: 80,
     textAlignVertical: "top",
-    paddingTop: 16,
   },
 
   sectionTitle: {
@@ -494,6 +481,5 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginBottom: 16,
     color: "#CC0033",
-    letterSpacing: -0.5,
   },
 });

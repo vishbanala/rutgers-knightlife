@@ -1,3 +1,7 @@
+// ---------------------------
+// SUPABASE CONFIG (React Native safe)
+// ---------------------------
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
@@ -10,14 +14,27 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import "react-native-url-polyfill/auto";
 
 const SUPABASE_URL = "https://dlplpqxixmzupgtbwqen.supabase.co";
 const SUPABASE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRscGxwcXhpeG16dXBndGJ3cWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MDk1NjUsImV4cCI6MjA3OTE4NTU2NX0.BcrXNNc3l9WzAuzGO8EFWe54zBwsOsdHKNje__mbwzw";
+
+// Create Supabase client safe for iOS/Android
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
+
+// ---------------------------
+// ADMIN CONFIG
+// ---------------------------
 const ADMIN_PASSWORD = "RUTGERS_SECRET_2025";
 const ADMIN_SECRET_KEY = "RUTGERS_ADMIN_2025";
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export default function SearchScreen() {
   const [frats, setFrats] = useState([]);
@@ -41,30 +58,25 @@ export default function SearchScreen() {
 
   useEffect(() => {
     const checkAdminAccess = () => {
-      if (__DEV__) {
-        setShowAdminUI(true);
-        return;
-      }
-
       try {
+        // In development mode (Expo local), always show admin UI
+        if (__DEV__) {
+          setShowAdminUI(true);
+          return;
+        }
+
+        // In production, check for secret key in URL
         const adminKey = params?.admin_key;
         if (adminKey === ADMIN_SECRET_KEY) {
           setShowAdminUI(true);
           return;
         }
 
-        if (typeof window !== "undefined") {
-          const urlParams = new URLSearchParams(window.location.search);
-          const urlAdminKey = urlParams.get("admin_key");
-          if (urlAdminKey === ADMIN_SECRET_KEY) {
-            setShowAdminUI(true);
-            return;
-          }
-        }
-
+        // If no valid key found in production, hide admin UI
         setShowAdminUI(false);
       } catch (error) {
         console.log("Error checking admin access:", error);
+        // In dev mode, show anyway; in production, hide
         setShowAdminUI(__DEV__);
       }
     };
@@ -73,16 +85,31 @@ export default function SearchScreen() {
   }, [params]);
 
   const fetchFrats = async () => {
-    setRefreshing(true);
-    const { data, error } = await supabase
-      .from("frats")
-      .select("*")
-      .order("name");
+    try {
+      setRefreshing(true);
+      const { data, error } = await supabase
+        .from("frats")
+        .select("*")
+        .order("name");
 
-    if (error) console.log("Fetch frats error:", error);
-    else setFrats(data);
-
-    setRefreshing(false);
+      if (error) {
+        console.log("Fetch frats error:", error);
+        setFrats([]); // Set empty array on error to prevent crashes
+        return;
+      }
+      
+      // Ensure data is always an array and has valid structure
+      if (Array.isArray(data)) {
+        setFrats(data);
+      } else {
+        setFrats([]);
+      }
+    } catch (err) {
+      console.log("Unexpected error fetching frats:", err);
+      setFrats([]); // Set empty array on error
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const toggleExpanded = (id) => {
@@ -99,35 +126,47 @@ export default function SearchScreen() {
   };
 
   const createFrat = async () => {
-    if (!adminMode) return alert("Unauthorized");
-    if (!newFrat.name || !newFrat.abbreviation || !newFrat.address)
-      return alert("Please fill out name, abbreviation, and address");
+    try {
+      if (!adminMode) return alert("Unauthorized");
+      if (!newFrat.name || !newFrat.abbreviation || !newFrat.address)
+        return alert("Please fill out name, abbreviation, and address");
 
-    const { error } = await supabase.from("frats").insert([newFrat]);
+      const { error } = await supabase.from("frats").insert([newFrat]);
 
-    if (error) {
-      console.log("Create frat error:", error);
-      alert("Error adding frat");
-    } else {
-      setNewFrat({ name: "", abbreviation: "", address: "", details: "" });
-      fetchFrats();
+      if (error) {
+        console.log("Create frat error:", error);
+        alert("Error adding frat: " + (error.message || "Unknown error"));
+      } else {
+        setNewFrat({ name: "", abbreviation: "", address: "", details: "" });
+        fetchFrats();
+      }
+    } catch (err) {
+      console.log("Unexpected error creating frat:", err);
+      alert("Unexpected error occurred");
     }
   };
 
   const deleteFrat = async (id) => {
-    if (!adminMode) return alert("Unauthorized");
+    try {
+      if (!adminMode) return alert("Unauthorized");
+      if (!id) return alert("Invalid frat ID");
 
-    const { error } = await supabase.from("frats").delete().eq("id", id);
+      const { error } = await supabase.from("frats").delete().eq("id", id);
 
-    if (error) {
-      console.log("Delete frat error:", error);
-      alert("Error deleting frat");
-    } else {
-      fetchFrats();
+      if (error) {
+        console.log("Delete frat error:", error);
+        alert("Error deleting frat: " + (error.message || "Unknown error"));
+      } else {
+        fetchFrats();
+      }
+    } catch (err) {
+      console.log("Unexpected error deleting frat:", err);
+      alert("Unexpected error occurred");
     }
   };
 
   const renderFratCard = ({ item }) => {
+    if (!item || !item.id) return null;
     const isExpanded = expandedId === item.id;
     return (
       <TouchableOpacity
@@ -137,15 +176,15 @@ export default function SearchScreen() {
       >
         <View style={styles.fratHeader}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.fratName}>{item.name}</Text>
-            <Text style={styles.fratAbbrev}>Known as {item.abbreviation}</Text>
+            <Text style={styles.fratName}>{item.name || "Unknown"}</Text>
+            <Text style={styles.fratAbbrev}>Known as {item.abbreviation || "N/A"}</Text>
           </View>
           <Text style={styles.chevron}>{isExpanded ? "▲" : "▼"}</Text>
         </View>
 
         <View style={styles.addressRow}>
           <Text style={styles.addressIcon}>📍</Text>
-          <Text style={styles.addressText}>{item.address}</Text>
+          <Text style={styles.addressText}>{item.address || "Address not provided"}</Text>
         </View>
 
         {isExpanded && (
@@ -158,7 +197,7 @@ export default function SearchScreen() {
               </Text>
             )}
 
-            {adminMode && (
+            {adminMode && item.id && (
               <TouchableOpacity
                 style={styles.deleteBtn}
                 onPress={() => deleteFrat(item.id)}
@@ -192,7 +231,7 @@ export default function SearchScreen() {
       ) : (
         <FlatList
           data={frats}
-          keyExtractor={(item) => item.id?.toString()}
+          keyExtractor={(item) => (item?.id || Math.random()).toString()}
           renderItem={renderFratCard}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={fetchFrats} />
