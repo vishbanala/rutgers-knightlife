@@ -8,20 +8,20 @@
     "userInterfaceStyle": "automatic",
     "description": "Discover fraternity events and information at Rutgers University. Your night, your way.",
     "privacy": "public",
-    "extra": {
-      "eas": {
-        "projectId": "95ecb139-6b4d-4008-bd4e-78116b097aff"
-      }
-    },
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
+    "extra": {
+      "eas": {
+        "projectId": "95ecb139-6b4d-4008-bd4e-78116b097aff"
+      }
+    },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.vishbanala.knightlife",
-      "buildNumber": "1",
+      "bundleIdentifier": "com.vishbanala.rutgersknightlife",
+      "buildNumber": "9",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "This app does not require location access.",
@@ -31,6 +31,7 @@
         "usesNonExemptEncryption": false
       }
     },
+
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -39,6 +40,7 @@
       "edgeToEdgeEnabled": true,
       "package": "com.vishbanala.knightlife"
     },
+
     "web": {
       "bundler": "metro",
       "favicon": "./assets/images/icon.png",
