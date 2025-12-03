@@ -1,7 +1,8 @@
 import { Link } from "expo-router";
+import { ErrorBoundary } from "react-error-boundary";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-export default function Home() {
+function HomeContent() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -11,21 +12,71 @@ export default function Home() {
       </View>
 
       <View style={styles.buttonContainer}>
-        <Link href="/events" asChild>
-          <TouchableOpacity style={styles.buttonRed} activeOpacity={0.8}>
-            <Text style={styles.buttonEmoji}>🎉</Text>
-            <Text style={styles.buttonText}>View Events</Text>
-          </TouchableOpacity>
-        </Link>
+        {(() => {
+          try {
+            return (
+              <Link href="/events" asChild>
+                <TouchableOpacity style={styles.buttonRed} activeOpacity={0.8}>
+                  <Text style={styles.buttonEmoji}>🎉</Text>
+                  <Text style={styles.buttonText}>View Events</Text>
+                </TouchableOpacity>
+              </Link>
+            );
+          } catch (e) {
+            return (
+              <TouchableOpacity style={styles.buttonRed} activeOpacity={0.8}>
+                <Text style={styles.buttonEmoji}>🎉</Text>
+                <Text style={styles.buttonText}>View Events</Text>
+              </TouchableOpacity>
+            );
+          }
+        })()}
 
-        <Link href="/search" asChild>
-          <TouchableOpacity style={styles.buttonBlack} activeOpacity={0.8}>
-            <Text style={styles.buttonEmoji}>🔍</Text>
-            <Text style={styles.buttonText}>Search Frats</Text>
-          </TouchableOpacity>
-        </Link>
+        {(() => {
+          try {
+            return (
+              <Link href="/search" asChild>
+                <TouchableOpacity style={styles.buttonBlack} activeOpacity={0.8}>
+                  <Text style={styles.buttonEmoji}>🔍</Text>
+                  <Text style={styles.buttonText}>Search Frats</Text>
+                </TouchableOpacity>
+              </Link>
+            );
+          } catch (e) {
+            return (
+              <TouchableOpacity style={styles.buttonBlack} activeOpacity={0.8}>
+                <Text style={styles.buttonEmoji}>🔍</Text>
+                <Text style={styles.buttonText}>Search Frats</Text>
+              </TouchableOpacity>
+            );
+          }
+        })()}
       </View>
     </View>
+  );
+}
+
+function HomeErrorFallback({ error, resetErrorBoundary }) {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Error</Text>
+      <TouchableOpacity style={styles.buttonRed} onPress={resetErrorBoundary}>
+        <Text style={styles.buttonText}>Try Again</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+export default function Home() {
+  return (
+    <ErrorBoundary
+      FallbackComponent={HomeErrorFallback}
+      onError={(error, errorInfo) => {
+        console.error("Home error:", error, errorInfo);
+      }}
+    >
+      <HomeContent />
+    </ErrorBoundary>
   );
 }
 

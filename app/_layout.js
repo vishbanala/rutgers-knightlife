@@ -1,3 +1,6 @@
+// CRITICAL: react-native-gesture-handler MUST be imported first
+import "react-native-gesture-handler";
+
 import { Stack } from "expo-router";
 import { ErrorBoundary } from "react-error-boundary";
 import { useEffect } from "react";
@@ -9,18 +12,34 @@ try {
     const originalHandler = ErrorUtils.getGlobalHandler();
     ErrorUtils.setGlobalHandler((error, isFatal) => {
       try {
-        console.error("Global error:", error, "isFatal:", isFatal);
+        // Enhanced logging for debugging
+        const errorInfo = {
+          message: error?.message || "Unknown error",
+          stack: error?.stack || "No stack trace",
+          isFatal: isFatal,
+          name: error?.name || "Error",
+          timestamp: new Date().toISOString(),
+        };
+        
+        console.error("=== GLOBAL ERROR ===");
+        console.error(JSON.stringify(errorInfo, null, 2));
+        console.error("Full error:", error);
+        console.error("===================");
+        
+        // Don't use AsyncStorage in error handler - it may not be initialized yet
+        // This was causing the TurboModule crash
+        
         // Call original handler to maintain default behavior
         if (originalHandler) {
           originalHandler(error, isFatal);
         }
       } catch (e) {
-        // Ignore errors in error handler
+        console.error("Error in error handler:", e);
       }
     });
   }
 } catch (e) {
-  // Ignore if ErrorUtils setup fails
+  console.error("Failed to setup ErrorUtils:", e);
 }
 
 // Error fallback component
@@ -76,7 +95,24 @@ export default function RootLayout() {
     <ErrorBoundary 
       FallbackComponent={ErrorFallback}
       onError={(error, errorInfo) => {
-        console.error("ErrorBoundary caught error:", error, errorInfo);
+        const crashInfo = {
+          error: {
+            message: error?.message,
+            stack: error?.stack,
+            name: error?.name,
+          },
+          errorInfo: errorInfo,
+          timestamp: new Date().toISOString(),
+        };
+        
+        console.error("=== ERROR BOUNDARY ===");
+        console.error(JSON.stringify(crashInfo, null, 2));
+        console.error("Full error:", error);
+        console.error("Error info:", errorInfo);
+        console.error("======================");
+        
+        // Don't use AsyncStorage in error handler - it may not be initialized yet
+        // This was causing the TurboModule crash
       }}
     >
       <Stack

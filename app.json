@@ -12,6 +12,17 @@
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "95ecb139-6b4d-4008-bd4e-78116b097aff"
@@ -20,11 +31,22 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.vishbanala.rutgersknightlife",
-      "buildNumber": "14",
+      "buildNumber": "16",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "This app does not require location access.",
-        "NSCameraUsageDescription": "This app does not require camera access."
+        "NSCameraUsageDescription": "This app does not require camera access.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSExceptionDomains": {
+            "dlplpqxixmzupgtbwqen.supabase.co": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true,
+              "NSExceptionRequiresForwardSecrecy": true,
+              "NSExceptionMinimumTLSVersion": "TLSv1.2"
+            }
+          }
+        }
       },
       "config": {
         "usesNonExemptEncryption": false

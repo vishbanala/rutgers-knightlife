@@ -1,5 +1,6 @@
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 import {
   FlatList,
   RefreshControl,
@@ -21,7 +22,7 @@ import {
 const ADMIN_PASSWORD = "RUTGERS_SECRET_2025";
 const ADMIN_SECRET_KEY = "RUTGERS_ADMIN_2025";
 
-export default function EventsScreen() {
+function EventsScreenContent() {
   const [events, setEvents] = useState([]);
   const [adminMode, setAdminMode] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -725,3 +726,34 @@ const styles = StyleSheet.create({
     color: "#CC0033",
   },
 });
+
+// Error fallback for this screen
+function EventsErrorFallback({ error, resetErrorBoundary }) {
+  return (
+    <View style={styles.container}>
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyText}>Error loading events</Text>
+        <TouchableOpacity 
+          style={styles.buttonBlack} 
+          onPress={resetErrorBoundary}
+        >
+          <Text style={styles.buttonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// Export with error boundary
+export default function EventsScreen() {
+  return (
+    <ErrorBoundary
+      FallbackComponent={EventsErrorFallback}
+      onError={(error, errorInfo) => {
+        console.error("EventsScreen error:", error, errorInfo);
+      }}
+    >
+      <EventsScreenContent />
+    </ErrorBoundary>
+  );
+}

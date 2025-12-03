@@ -20,7 +20,7 @@ import {
 const ADMIN_PASSWORD = "RUTGERS_SECRET_2025";
 const ADMIN_SECRET_KEY = "RUTGERS_ADMIN_2025";
 
-export default function SearchScreen() {
+function SearchScreenContent() {
   const [frats, setFrats] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [adminMode, setAdminMode] = useState(false);
@@ -668,3 +668,34 @@ const styles = StyleSheet.create({
     color: "#CC0033",
   },
 });
+
+// Error fallback for this screen
+function SearchErrorFallback({ error, resetErrorBoundary }) {
+  return (
+    <View style={styles.container}>
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyTitle}>Error loading frats</Text>
+        <TouchableOpacity 
+          style={styles.buttonBlack} 
+          onPress={resetErrorBoundary}
+        >
+          <Text style={styles.buttonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// Export with error boundary
+export default function SearchScreen() {
+  return (
+    <ErrorBoundary
+      FallbackComponent={SearchErrorFallback}
+      onError={(error, errorInfo) => {
+        console.error("SearchScreen error:", error, errorInfo);
+      }}
+    >
+      <SearchScreenContent />
+    </ErrorBoundary>
+  );
+}
