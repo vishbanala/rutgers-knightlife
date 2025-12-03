@@ -134,15 +134,18 @@ function SearchScreenContent() {
     // Set ready immediately - don't wait for Supabase
     setIsReady(true);
     
-    // Initialize and load data after a longer delay
+    // TEMPORARILY DISABLED: Initialize and load data after a longer delay
+    // This helps isolate if Supabase is causing the crash
     const initAndLoad = async () => {
       try {
-        // Wait longer to ensure React Native is completely ready
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Wait MUCH longer to ensure React Native is completely ready
+        await new Promise(resolve => setTimeout(resolve, 3000));
         
         if (cancelled || !mounted) return;
         
-        // Initialize Supabase client (may fail, that's OK)
+        // TEMPORARILY DISABLED: Don't initialize Supabase on startup
+        // Uncomment this after confirming app doesn't crash without it
+        /*
         try {
           const supabaseModule = await import("../lib/supabase");
           const initSupabaseClient = supabaseModule.initSupabaseClient;
@@ -154,11 +157,12 @@ function SearchScreenContent() {
         if (cancelled || !mounted) return;
         
         // Additional delay before fetching
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         if (!cancelled && mounted) {
           fetchFrats();
         }
+        */
       } catch (err) {
         console.log("Error in initial load:", err);
       }

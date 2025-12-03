@@ -1,4 +1,5 @@
 // CRITICAL: react-native-gesture-handler MUST be imported first
+// Must use import (not require) for ES modules
 import "react-native-gesture-handler";
 
 import { Stack } from "expo-router";
