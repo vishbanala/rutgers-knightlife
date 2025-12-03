@@ -1,7 +1,7 @@
 // ---------------------------
 // SUPABASE CONFIG (React Native safe)
 // ---------------------------
-import { getSupabaseClient } from "../lib/supabase";
+import { getSupabaseClient, initSupabaseClient } from "../lib/supabase";
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -43,18 +43,42 @@ export default function SearchScreen() {
   }
 
   useEffect(() => {
-    // Add delay to ensure React Native is fully initialized
-    const timer = setTimeout(() => {
+    let mounted = true;
+    
+    // Initialize Supabase first, then load data
+    const initAndLoad = async () => {
       try {
+        // Wait longer to ensure React Native is fully ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        if (!mounted) return;
+        
+        // Initialize Supabase client
+        await initSupabaseClient();
+        
+        if (!mounted) return;
+        
         setIsReady(true);
-        fetchFrats();
+        
+        // Small delay before fetching
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        if (mounted) {
+          fetchFrats();
+        }
       } catch (err) {
         console.log("Error in initial load:", err);
-        setIsReady(true);
+        if (mounted) {
+          setIsReady(true);
+        }
       }
-    }, 300);
+    };
     
-    return () => clearTimeout(timer);
+    initAndLoad();
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -91,9 +115,21 @@ export default function SearchScreen() {
   const fetchFrats = async () => {
     try {
       setRefreshing(true);
-      const supabase = getSupabaseClient();
+      
+      // Ensure Supabase is initialized
+      let supabase = getSupabaseClient();
+      if (!supabase) {
+        try {
+          supabase = await initSupabaseClient();
+        } catch (initErr) {
+          console.log("Error initializing Supabase:", initErr);
+          setFrats([]);
+          return;
+        }
+      }
       
       if (!supabase) {
+        console.log("Supabase client not available");
         setFrats([]);
         return;
       }
@@ -105,7 +141,7 @@ export default function SearchScreen() {
 
       if (error) {
         console.log("Fetch frats error:", error);
-        setFrats([]); // Set empty array on error to prevent crashes
+        setFrats([]);
         return;
       }
       
@@ -117,9 +153,13 @@ export default function SearchScreen() {
       }
     } catch (err) {
       console.log("Unexpected error fetching frats:", err);
-      setFrats([]); // Set empty array on error
+      setFrats([]);
     } finally {
-      setRefreshing(false);
+      try {
+        setRefreshing(false);
+      } catch (e) {
+        // Ignore errors setting refreshing state
+      }
     }
   };
 
@@ -151,7 +191,11 @@ export default function SearchScreen() {
         return;
       }
 
-      const supabase = getSupabaseClient();
+      let supabase = getSupabaseClient();
+      if (!supabase) {
+        supabase = await initSupabaseClient();
+      }
+      
       if (!supabase) {
         if (typeof alert !== "undefined") alert("Database connection error");
         return;
@@ -185,7 +229,11 @@ export default function SearchScreen() {
         return;
       }
 
-      const supabase = getSupabaseClient();
+      let supabase = getSupabaseClient();
+      if (!supabase) {
+        supabase = await initSupabaseClient();
+      }
+      
       if (!supabase) {
         if (typeof alert !== "undefined") alert("Database connection error");
         return;

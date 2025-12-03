@@ -41,21 +41,27 @@ function ErrorFallback({ error, resetErrorBoundary }) {
 
 export default function RootLayout() {
   useEffect(() => {
-    // Catch any unhandled promise rejections
-    const rejectionHandler = (event) => {
-      console.error("Unhandled promise rejection:", event.reason);
-      event.preventDefault();
-    };
-    
-    if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("unhandledrejection", rejectionHandler);
-    }
-    
-    return () => {
-      if (typeof window !== "undefined" && window.removeEventListener) {
-        window.removeEventListener("unhandledrejection", rejectionHandler);
+    // Catch any unhandled promise rejections (web only)
+    try {
+      if (typeof window !== "undefined" && window.addEventListener) {
+        const rejectionHandler = (event) => {
+          console.error("Unhandled promise rejection:", event.reason);
+          if (event && typeof event.preventDefault === "function") {
+            event.preventDefault();
+          }
+        };
+        
+        window.addEventListener("unhandledrejection", rejectionHandler);
+        
+        return () => {
+          if (typeof window !== "undefined" && window.removeEventListener) {
+            window.removeEventListener("unhandledrejection", rejectionHandler);
+          }
+        };
       }
-    };
+    } catch (e) {
+      console.log("Error setting up rejection handler:", e);
+    }
   }, []);
 
   return (
