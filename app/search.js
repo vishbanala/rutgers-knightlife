@@ -1,7 +1,7 @@
 // ---------------------------
 // SUPABASE CONFIG (React Native safe)
 // ---------------------------
-import { getSupabaseClient, initSupabaseClient } from "../lib/supabase";
+// NO TOP-LEVEL IMPORTS - Everything loaded dynamically
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -52,9 +52,13 @@ export default function SearchScreen() {
         return;
       }
       
-      // Try to get or initialize Supabase
+      // Dynamically import Supabase functions - NO top-level import
       let supabase = null;
       try {
+        const supabaseModule = await import("../lib/supabase");
+        const getSupabaseClient = supabaseModule.getSupabaseClient;
+        const initSupabaseClient = supabaseModule.initSupabaseClient;
+        
         supabase = getSupabaseClient();
         if (!supabase) {
           supabase = await initSupabaseClient();
@@ -121,22 +125,27 @@ export default function SearchScreen() {
   }, []);
 
   // ---------------------------
-  // LOAD FRATS
+  // LOAD FRATS - Delayed initialization
   // ---------------------------
   useEffect(() => {
     let mounted = true;
     let cancelled = false;
     
-    // Initialize Supabase first, then load data
+    // Set ready immediately - don't wait for Supabase
+    setIsReady(true);
+    
+    // Initialize and load data after a longer delay
     const initAndLoad = async () => {
       try {
-        // Wait to ensure React Native is fully ready
-        await new Promise(resolve => setTimeout(resolve, 800));
+        // Wait longer to ensure React Native is completely ready
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
         if (cancelled || !mounted) return;
         
         // Initialize Supabase client (may fail, that's OK)
         try {
+          const supabaseModule = await import("../lib/supabase");
+          const initSupabaseClient = supabaseModule.initSupabaseClient;
           await initSupabaseClient();
         } catch (initErr) {
           console.log("Supabase init failed, continuing without it:", initErr);
@@ -144,19 +153,14 @@ export default function SearchScreen() {
         
         if (cancelled || !mounted) return;
         
-        setIsReady(true);
-        
-        // Small delay before fetching
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Additional delay before fetching
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         if (!cancelled && mounted) {
           fetchFrats();
         }
       } catch (err) {
         console.log("Error in initial load:", err);
-        if (!cancelled && mounted) {
-          setIsReady(true);
-        }
       }
     };
     
@@ -198,6 +202,10 @@ export default function SearchScreen() {
 
       let supabase = null;
       try {
+        const supabaseModule = await import("../lib/supabase");
+        const getSupabaseClient = supabaseModule.getSupabaseClient;
+        const initSupabaseClient = supabaseModule.initSupabaseClient;
+        
         supabase = getSupabaseClient();
         if (!supabase) {
           supabase = await initSupabaseClient();
@@ -241,6 +249,10 @@ export default function SearchScreen() {
 
       let supabase = null;
       try {
+        const supabaseModule = await import("../lib/supabase");
+        const getSupabaseClient = supabaseModule.getSupabaseClient;
+        const initSupabaseClient = supabaseModule.initSupabaseClient;
+        
         supabase = getSupabaseClient();
         if (!supabase) {
           supabase = await initSupabaseClient();
@@ -455,11 +467,32 @@ export default function SearchScreen() {
         </View>
       )}
 
-      <Link href="/" asChild>
-        <TouchableOpacity style={styles.homeButton}>
-          <Text style={styles.homeButtonText}>← Back to Home</Text>
-        </TouchableOpacity>
-      </Link>
+      {(() => {
+        try {
+          return (
+            <Link href="/" asChild>
+              <TouchableOpacity style={styles.homeButton}>
+                <Text style={styles.homeButtonText}>← Back to Home</Text>
+              </TouchableOpacity>
+            </Link>
+          );
+        } catch (e) {
+          return (
+            <TouchableOpacity 
+              style={styles.homeButton}
+              onPress={() => {
+                try {
+                  console.log("Link failed, using fallback");
+                } catch (err) {
+                  console.log("Navigation error:", err);
+                }
+              }}
+            >
+              <Text style={styles.homeButtonText}>← Back to Home</Text>
+            </TouchableOpacity>
+          );
+        }
+      })()}
     </View>
   );
 }

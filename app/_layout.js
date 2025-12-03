@@ -3,16 +3,24 @@ import { ErrorBoundary } from "react-error-boundary";
 import { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-// Global error handler
-if (typeof ErrorUtils !== "undefined") {
-  const originalHandler = ErrorUtils.getGlobalHandler();
-  ErrorUtils.setGlobalHandler((error, isFatal) => {
-    console.error("Global error:", error, "isFatal:", isFatal);
-    // Call original handler to maintain default behavior
-    if (originalHandler) {
-      originalHandler(error, isFatal);
-    }
-  });
+// Global error handler - wrapped in try-catch to prevent crashes
+try {
+  if (typeof ErrorUtils !== "undefined") {
+    const originalHandler = ErrorUtils.getGlobalHandler();
+    ErrorUtils.setGlobalHandler((error, isFatal) => {
+      try {
+        console.error("Global error:", error, "isFatal:", isFatal);
+        // Call original handler to maintain default behavior
+        if (originalHandler) {
+          originalHandler(error, isFatal);
+        }
+      } catch (e) {
+        // Ignore errors in error handler
+      }
+    });
+  }
+} catch (e) {
+  // Ignore if ErrorUtils setup fails
 }
 
 // Error fallback component
