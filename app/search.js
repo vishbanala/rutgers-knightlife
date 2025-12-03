@@ -1,8 +1,7 @@
 // ---------------------------
 // SUPABASE CONFIG (React Native safe)
 // ---------------------------
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseClient } from "../lib/supabase";
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -14,21 +13,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import "react-native-url-polyfill/auto";
-
-const SUPABASE_URL = "https://dlplpqxixmzupgtbwqen.supabase.co";
-const SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRscGxwcXhpeG16dXBndGJ3cWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MDk1NjUsImV4cCI6MjA3OTE4NTU2NX0.BcrXNNc3l9WzAuzGO8EFWe54zBwsOsdHKNje__mbwzw";
-
-// Create Supabase client safe for iOS/Android
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
 
 // ---------------------------
 // ADMIN CONFIG
@@ -53,7 +37,12 @@ export default function SearchScreen() {
   const params = useLocalSearchParams();
 
   useEffect(() => {
-    fetchFrats();
+    // Add small delay to ensure React Native is fully initialized
+    const timer = setTimeout(() => {
+      fetchFrats();
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -87,6 +76,13 @@ export default function SearchScreen() {
   const fetchFrats = async () => {
     try {
       setRefreshing(true);
+      const supabase = getSupabaseClient();
+      
+      if (!supabase) {
+        setFrats([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("frats")
         .select("*")
@@ -117,51 +113,82 @@ export default function SearchScreen() {
   };
 
   const tryLogin = () => {
-    if (passwordInput === ADMIN_PASSWORD) {
-      setAdminMode(true);
-      alert("Admin access granted");
-    } else {
-      alert("Wrong password");
+    try {
+      if (passwordInput === ADMIN_PASSWORD) {
+        setAdminMode(true);
+        if (typeof alert !== "undefined") alert("Admin access granted");
+      } else {
+        if (typeof alert !== "undefined") alert("Wrong password");
+      }
+    } catch (err) {
+      console.log("Error in tryLogin:", err);
     }
   };
 
   const createFrat = async () => {
     try {
-      if (!adminMode) return alert("Unauthorized");
-      if (!newFrat.name || !newFrat.abbreviation || !newFrat.address)
-        return alert("Please fill out name, abbreviation, and address");
+      if (!adminMode) {
+        if (typeof alert !== "undefined") alert("Unauthorized");
+        return;
+      }
+      if (!newFrat.name || !newFrat.abbreviation || !newFrat.address) {
+        if (typeof alert !== "undefined") alert("Please fill out name, abbreviation, and address");
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        if (typeof alert !== "undefined") alert("Database connection error");
+        return;
+      }
 
       const { error } = await supabase.from("frats").insert([newFrat]);
 
       if (error) {
         console.log("Create frat error:", error);
-        alert("Error adding frat: " + (error.message || "Unknown error"));
+        if (typeof alert !== "undefined") {
+          alert("Error adding frat: " + (error.message || "Unknown error"));
+        }
       } else {
         setNewFrat({ name: "", abbreviation: "", address: "", details: "" });
         fetchFrats();
       }
     } catch (err) {
       console.log("Unexpected error creating frat:", err);
-      alert("Unexpected error occurred");
+      if (typeof alert !== "undefined") alert("Unexpected error occurred");
     }
   };
 
   const deleteFrat = async (id) => {
     try {
-      if (!adminMode) return alert("Unauthorized");
-      if (!id) return alert("Invalid frat ID");
+      if (!adminMode) {
+        if (typeof alert !== "undefined") alert("Unauthorized");
+        return;
+      }
+      if (!id) {
+        if (typeof alert !== "undefined") alert("Invalid frat ID");
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        if (typeof alert !== "undefined") alert("Database connection error");
+        return;
+      }
 
       const { error } = await supabase.from("frats").delete().eq("id", id);
 
       if (error) {
         console.log("Delete frat error:", error);
-        alert("Error deleting frat: " + (error.message || "Unknown error"));
+        if (typeof alert !== "undefined") {
+          alert("Error deleting frat: " + (error.message || "Unknown error"));
+        }
       } else {
         fetchFrats();
       }
     } catch (err) {
       console.log("Unexpected error deleting frat:", err);
-      alert("Unexpected error occurred");
+      if (typeof alert !== "undefined") alert("Unexpected error occurred");
     }
   };
 

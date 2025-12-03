@@ -13,23 +13,7 @@ import {
 // ---------------------------
 // SUPABASE CONFIG (React Native safe)
 // ---------------------------
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createClient } from "@supabase/supabase-js";
-import "react-native-url-polyfill/auto";
-
-const SUPABASE_URL = "https://dlplpqxixmzupgtbwqen.supabase.co";
-const SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRscGxwcXhpeG16dXBndGJ3cWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MDk1NjUsImV4cCI6MjA3OTE4NTU2NX0.BcrXNNc3l9WzAuzGO8EFWe54zBwsOsdHKNje__mbwzw";
-
-// Create Supabase client safe for iOS/Android
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+import { getSupabaseClient } from "../lib/supabase";
 
 // ---------------------------
 // ADMIN CONFIG
@@ -58,12 +42,24 @@ export default function EventsScreen() {
   // LOAD EVENTS 
   // ---------------------------
   useEffect(() => {
-    fetchEvents();
+    // Add small delay to ensure React Native is fully initialized
+    const timer = setTimeout(() => {
+      fetchEvents();
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const fetchEvents = async () => {
     try {
       setRefreshing(true);
+      const supabase = getSupabaseClient();
+      
+      if (!supabase) {
+        setEvents([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("events")
         .select("*")
@@ -121,17 +117,31 @@ export default function EventsScreen() {
   // ---------------------------
   // SECRET TAP TO UNLOCK ADMIN MODE
   // ---------------------------
+  useEffect(() => {
+    let timeoutId = null;
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, []);
+
   const handleSecretTap = () => {
-    const count = tapCount + 1;
-    setTapCount(count);
+    try {
+      const count = tapCount + 1;
+      setTapCount(count);
 
-    // Reset after short delay
-    setTimeout(() => setTapCount(0), 700);
+      // Reset after short delay
+      const timeoutId = setTimeout(() => setTapCount(0), 700);
 
-    if (count >= 5) {
-      setAdminMode(true);
-      alert("Admin Mode Unlocked");
-      setTapCount(0);
+      if (count >= 5) {
+        setAdminMode(true);
+        if (typeof alert !== "undefined") {
+          alert("Admin Mode Unlocked");
+        }
+        setTapCount(0);
+        clearTimeout(timeoutId);
+      }
+    } catch (err) {
+      console.log("Error in handleSecretTap:", err);
     }
   };
 
@@ -152,20 +162,31 @@ export default function EventsScreen() {
   // ---------------------------
   const createEvent = async () => {
     try {
-      if (!adminMode) return alert("Unauthorized");
+      if (!adminMode) {
+        if (typeof alert !== "undefined") alert("Unauthorized");
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        if (typeof alert !== "undefined") alert("Database connection error");
+        return;
+      }
 
       const { error } = await supabase.from("events").insert([newEvent]);
 
       if (error) {
         console.log("Create error:", error);
-        alert("Error creating event: " + (error.message || "Unknown error"));
+        if (typeof alert !== "undefined") {
+          alert("Error creating event: " + (error.message || "Unknown error"));
+        }
       } else {
         setNewEvent({ frat: "", date: "", time: "", details: "" });
         fetchEvents();
       }
     } catch (err) {
       console.log("Unexpected error creating event:", err);
-      alert("Unexpected error occurred");
+      if (typeof alert !== "undefined") alert("Unexpected error occurred");
     }
   };
 
@@ -174,20 +195,34 @@ export default function EventsScreen() {
   // ---------------------------
   const deleteEvent = async (id) => {
     try {
-      if (!adminMode) return alert("Unauthorized");
-      if (!id) return alert("Invalid event ID");
+      if (!adminMode) {
+        if (typeof alert !== "undefined") alert("Unauthorized");
+        return;
+      }
+      if (!id) {
+        if (typeof alert !== "undefined") alert("Invalid event ID");
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        if (typeof alert !== "undefined") alert("Database connection error");
+        return;
+      }
 
       const { error } = await supabase.from("events").delete().eq("id", id);
 
       if (error) {
         console.log("Delete error:", error);
-        alert("Error deleting event: " + (error.message || "Unknown error"));
+        if (typeof alert !== "undefined") {
+          alert("Error deleting event: " + (error.message || "Unknown error"));
+        }
       } else {
         fetchEvents();
       }
     } catch (err) {
       console.log("Unexpected error deleting event:", err);
-      alert("Unexpected error occurred");
+      if (typeof alert !== "undefined") alert("Unexpected error occurred");
     }
   };
 
