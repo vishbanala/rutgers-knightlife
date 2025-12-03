@@ -1,5 +1,5 @@
 import { Link, Stack, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
   RefreshControl,
@@ -29,12 +29,8 @@ export default function EventsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isReady, setIsReady] = useState(false);
 
-  let params = null;
-  try {
-    params = useLocalSearchParams();
-  } catch (e) {
-    console.log("Error getting params:", e);
-  }
+  // Hooks MUST be called unconditionally - can't wrap in try-catch
+  const params = useLocalSearchParams();
 
   const [tapCount, setTapCount] = useState(0);
 
@@ -46,35 +42,122 @@ export default function EventsScreen() {
   });
 
   // ---------------------------
+  // FETCH EVENTS - Defined first with useCallback
+  // ---------------------------
+  const fetchEvents = useCallback(async () => {
+    let refreshingSet = false;
+    try {
+      try {
+        setRefreshing(true);
+        refreshingSet = true;
+      } catch (e) {
+        // Component might be unmounting
+        return;
+      }
+      
+      // Try to get or initialize Supabase
+      let supabase = null;
+      try {
+        supabase = getSupabaseClient();
+        if (!supabase) {
+          supabase = await initSupabaseClient();
+        }
+      } catch (initErr) {
+        console.log("Supabase unavailable:", initErr);
+        // Continue without Supabase - show empty state
+      }
+      
+      if (!supabase) {
+        console.log("No database connection - showing empty state");
+        setEvents([]);
+        return;
+      }
+
+      // Make the query with timeout protection
+      let queryResult = null;
+      try {
+        const queryPromise = supabase
+          .from("events")
+          .select("*")
+          .order("id", { ascending: false });
+
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Query timeout")), 10000)
+        );
+
+        queryResult = await Promise.race([queryPromise, timeoutPromise]).catch(err => {
+          console.log("Query failed:", err);
+          return { data: null, error: err };
+        });
+      } catch (queryErr) {
+        console.log("Query error:", queryErr);
+        queryResult = { data: null, error: queryErr };
+      }
+
+      const { data, error } = queryResult || { data: null, error: new Error("No result") };
+
+      if (error) {
+        console.log("Fetch error:", error);
+        setEvents([]);
+        return;
+      }
+      
+      // Ensure data is always an array and filter invalid items
+      if (Array.isArray(data)) {
+        const validData = data.filter(item => item && typeof item === "object");
+        setEvents(validData);
+      } else {
+        setEvents([]);
+      }
+    } catch (err) {
+      console.log("Unexpected error fetching events:", err);
+      setEvents([]);
+    } finally {
+      if (refreshingSet) {
+        try {
+          setRefreshing(false);
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+  }, []);
+
+  // ---------------------------
   // LOAD EVENTS 
   // ---------------------------
   useEffect(() => {
     let mounted = true;
+    let cancelled = false;
     
     // Initialize Supabase first, then load data
     const initAndLoad = async () => {
       try {
-        // Wait longer to ensure React Native is fully ready
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait to ensure React Native is fully ready
+        await new Promise(resolve => setTimeout(resolve, 800));
         
-        if (!mounted) return;
+        if (cancelled || !mounted) return;
         
-        // Initialize Supabase client
-        await initSupabaseClient();
+        // Initialize Supabase client (may fail, that's OK)
+        try {
+          await initSupabaseClient();
+        } catch (initErr) {
+          console.log("Supabase init failed, continuing without it:", initErr);
+        }
         
-        if (!mounted) return;
+        if (cancelled || !mounted) return;
         
         setIsReady(true);
         
         // Small delay before fetching
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
         
-        if (mounted) {
+        if (!cancelled && mounted) {
           fetchEvents();
         }
       } catch (err) {
         console.log("Error in initial load:", err);
-        if (mounted) {
+        if (!cancelled && mounted) {
           setIsReady(true);
         }
       }
@@ -83,60 +166,10 @@ export default function EventsScreen() {
     initAndLoad();
     
     return () => {
+      cancelled = true;
       mounted = false;
     };
-  }, []);
-
-  const fetchEvents = async () => {
-    try {
-      setRefreshing(true);
-      
-      // Ensure Supabase is initialized
-      let supabase = getSupabaseClient();
-      if (!supabase) {
-        try {
-          supabase = await initSupabaseClient();
-        } catch (initErr) {
-          console.log("Error initializing Supabase:", initErr);
-          setEvents([]);
-          return;
-        }
-      }
-      
-      if (!supabase) {
-        console.log("Supabase client not available");
-        setEvents([]);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .order("id", { ascending: false });
-
-      if (error) {
-        console.log("Fetch error:", error);
-        setEvents([]);
-        return;
-      }
-      
-      // Ensure data is always an array and has valid structure
-      if (Array.isArray(data)) {
-        setEvents(data);
-      } else {
-        setEvents([]);
-      }
-    } catch (err) {
-      console.log("Unexpected error fetching events:", err);
-      setEvents([]);
-    } finally {
-      try {
-        setRefreshing(false);
-      } catch (e) {
-        // Ignore errors setting refreshing state
-      }
-    }
-  };
+  }, [fetchEvents]);
 
   // ---------------------------
   // ADMIN ACCESS CHECK
@@ -152,10 +185,14 @@ export default function EventsScreen() {
           return;
         }
 
-        // Check for router param
-        if (params && params.admin_key === ADMIN_SECRET_KEY) {
-          setShowAdminUI(true);
-          return;
+        // Check for router param (safe access)
+        try {
+          if (params && typeof params === "object" && params.admin_key === ADMIN_SECRET_KEY) {
+            setShowAdminUI(true);
+            return;
+          }
+        } catch (e) {
+          console.log("Error reading params:", e);
         }
 
         setShowAdminUI(false);
@@ -186,16 +223,26 @@ export default function EventsScreen() {
       const count = tapCount + 1;
       setTapCount(count);
 
-      // Reset after short delay
-      const timeoutId = setTimeout(() => setTapCount(0), 700);
+      // Reset after short delay - store timeout ID for cleanup
+      const timeoutId = setTimeout(() => {
+        try {
+          setTapCount(0);
+        } catch (e) {
+          // Ignore
+        }
+      }, 700);
 
       if (count >= 5) {
-        setAdminMode(true);
-        if (typeof alert !== "undefined") {
-          alert("Admin Mode Unlocked");
+        try {
+          setAdminMode(true);
+          if (typeof alert !== "undefined") {
+            alert("Admin Mode Unlocked");
+          }
+          setTapCount(0);
+          clearTimeout(timeoutId);
+        } catch (e) {
+          console.log("Error in admin unlock:", e);
         }
-        setTapCount(0);
-        clearTimeout(timeoutId);
       }
     } catch (err) {
       console.log("Error in handleSecretTap:", err);
@@ -225,16 +272,21 @@ export default function EventsScreen() {
   // ---------------------------
   // CREATE EVENT
   // ---------------------------
-  const createEvent = async () => {
+  const createEvent = useCallback(async () => {
     try {
       if (!adminMode) {
         if (typeof alert !== "undefined") alert("Unauthorized");
         return;
       }
 
-      let supabase = getSupabaseClient();
-      if (!supabase) {
-        supabase = await initSupabaseClient();
+      let supabase = null;
+      try {
+        supabase = getSupabaseClient();
+        if (!supabase) {
+          supabase = await initSupabaseClient();
+        }
+      } catch (initErr) {
+        console.log("Supabase init error:", initErr);
       }
       
       if (!supabase) {
@@ -257,12 +309,12 @@ export default function EventsScreen() {
       console.log("Unexpected error creating event:", err);
       if (typeof alert !== "undefined") alert("Unexpected error occurred");
     }
-  };
+  }, [adminMode, newEvent, fetchEvents]);
 
   // ---------------------------
   // DELETE EVENT
   // ---------------------------
-  const deleteEvent = async (id) => {
+  const deleteEvent = useCallback(async (id) => {
     try {
       if (!adminMode) {
         if (typeof alert !== "undefined") alert("Unauthorized");
@@ -273,9 +325,14 @@ export default function EventsScreen() {
         return;
       }
 
-      let supabase = getSupabaseClient();
-      if (!supabase) {
-        supabase = await initSupabaseClient();
+      let supabase = null;
+      try {
+        supabase = getSupabaseClient();
+        if (!supabase) {
+          supabase = await initSupabaseClient();
+        }
+      } catch (initErr) {
+        console.log("Supabase init error:", initErr);
       }
       
       if (!supabase) {
@@ -297,7 +354,7 @@ export default function EventsScreen() {
       console.log("Unexpected error deleting event:", err);
       if (typeof alert !== "undefined") alert("Unexpected error occurred");
     }
-  };
+  }, [adminMode, fetchEvents]);
 
   // ---------------------------
   // UI
@@ -338,7 +395,13 @@ export default function EventsScreen() {
       {/* Refresh */}
       <TouchableOpacity 
         style={styles.buttonRed} 
-        onPress={fetchEvents}
+        onPress={() => {
+          try {
+            fetchEvents();
+          } catch (e) {
+            console.log("Error refreshing:", e);
+          }
+        }}
         activeOpacity={0.8}
       >
         <Text style={styles.refreshIcon}>🔄</Text>
@@ -346,7 +409,7 @@ export default function EventsScreen() {
       </TouchableOpacity>
 
       {/* Event List */}
-      {events.length === 0 ? (
+      {!Array.isArray(events) || events.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyEmoji}>📅</Text>
           <Text style={styles.emptyText}>No events yet</Text>
@@ -354,35 +417,55 @@ export default function EventsScreen() {
         </View>
       ) : (
         <FlatList
-          data={events}
-          keyExtractor={(item) => (item?.id || Math.random()).toString()}
-          renderItem={({ item }) => {
-            if (!item) return null;
-            return (
-              <View style={styles.eventCard}>
-                <View style={styles.eventHeader}>
-                  <Text style={styles.eventFrat}>🎉 {item.frat || "Unknown"}</Text>
+          data={Array.isArray(events) ? events : []}
+          keyExtractor={(item, index) => {
+            try {
+              if (item && item.id) {
+                return String(item.id);
+              }
+              return `event-${index}`;
+            } catch (e) {
+              return `event-fallback-${index}`;
+            }
+          }}
+          renderItem={({ item, index }) => {
+            try {
+              if (!item || typeof item !== "object") return null;
+              return (
+                <View style={styles.eventCard}>
+                  <View style={styles.eventHeader}>
+                    <Text style={styles.eventFrat}>🎉 {item.frat || "Unknown"}</Text>
 
-                  {adminMode && item.id && (
-                    <TouchableOpacity
-                      onPress={() => deleteEvent(item.id)}
-                      style={styles.deleteBtn}
-                    >
-                      <Text style={styles.deleteText}>🗑️</Text>
-                    </TouchableOpacity>
-                  )}
+                    {adminMode && item.id && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          try {
+                            deleteEvent(item.id);
+                          } catch (e) {
+                            console.log("Error in delete:", e);
+                          }
+                        }}
+                        style={styles.deleteBtn}
+                      >
+                        <Text style={styles.deleteText}>🗑️</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <View style={styles.eventTimeRow}>
+                    <Text style={styles.eventDateIcon}>📅</Text>
+                    <Text style={styles.eventInfo}>
+                      {item.date || "TBD"} @ {item.time || "TBD"}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.eventDetails}>{item.details || "No details provided"}</Text>
                 </View>
-
-                <View style={styles.eventTimeRow}>
-                  <Text style={styles.eventDateIcon}>📅</Text>
-                  <Text style={styles.eventInfo}>
-                    {item.date || "TBD"} @ {item.time || "TBD"}
-                  </Text>
-                </View>
-
-                <Text style={styles.eventDetails}>{item.details || "No details provided"}</Text>
-              </View>
-            );
+              );
+            } catch (e) {
+              console.log("Error rendering item:", e);
+              return null;
+            }
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={fetchEvents} />
