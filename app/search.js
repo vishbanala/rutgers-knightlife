@@ -27,6 +27,7 @@ export default function SearchScreen() {
   const [showAdminUI, setShowAdminUI] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const [newFrat, setNewFrat] = useState({
     name: "",
     abbreviation: "",
@@ -34,13 +35,24 @@ export default function SearchScreen() {
     details: "",
   });
 
-  const params = useLocalSearchParams();
+  let params = null;
+  try {
+    params = useLocalSearchParams();
+  } catch (e) {
+    console.log("Error getting params:", e);
+  }
 
   useEffect(() => {
-    // Add small delay to ensure React Native is fully initialized
+    // Add delay to ensure React Native is fully initialized
     const timer = setTimeout(() => {
-      fetchFrats();
-    }, 100);
+      try {
+        setIsReady(true);
+        fetchFrats();
+      } catch (err) {
+        console.log("Error in initial load:", err);
+        setIsReady(true);
+      }
+    }, 300);
     
     return () => clearTimeout(timer);
   }, []);
@@ -48,15 +60,16 @@ export default function SearchScreen() {
   useEffect(() => {
     const checkAdminAccess = () => {
       try {
-        // In development mode (Expo local), always show admin UI
-        if (__DEV__) {
+        // Check if __DEV__ is available (might not be in some builds)
+        const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+        
+        if (isDev) {
           setShowAdminUI(true);
           return;
         }
 
         // In production, check for secret key in URL
-        const adminKey = params?.admin_key;
-        if (adminKey === ADMIN_SECRET_KEY) {
+        if (params && params.admin_key === ADMIN_SECRET_KEY) {
           setShowAdminUI(true);
           return;
         }
@@ -65,13 +78,15 @@ export default function SearchScreen() {
         setShowAdminUI(false);
       } catch (error) {
         console.log("Error checking admin access:", error);
-        // In dev mode, show anyway; in production, hide
-        setShowAdminUI(__DEV__);
+        const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+        setShowAdminUI(isDev);
       }
     };
 
-    checkAdminAccess();
-  }, [params]);
+    if (isReady) {
+      checkAdminAccess();
+    }
+  }, [params, isReady]);
 
   const fetchFrats = async () => {
     try {
@@ -238,9 +253,26 @@ export default function SearchScreen() {
     );
   };
 
+  // Don't render until ready to prevent crashes
+  if (!isReady) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>Loading...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: "Search Frats" }} />
+      {(() => {
+        try {
+          return <Stack.Screen options={{ title: "Search Frats" }} />;
+        } catch (e) {
+          return null;
+        }
+      })()}
 
       <Text style={styles.pageTitle}>Rutgers Fraternity Directory</Text>
       <Text style={styles.pageSubtitle}>

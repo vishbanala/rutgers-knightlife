@@ -1,14 +1,38 @@
 import { Stack } from "expo-router";
 import { ErrorBoundary } from "react-error-boundary";
+import { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
+// Global error handler
+if (typeof ErrorUtils !== "undefined") {
+  const originalHandler = ErrorUtils.getGlobalHandler();
+  ErrorUtils.setGlobalHandler((error, isFatal) => {
+    console.error("Global error:", error, "isFatal:", isFatal);
+    // Call original handler to maintain default behavior
+    if (originalHandler) {
+      originalHandler(error, isFatal);
+    }
+  });
+}
 
 // Error fallback component
 function ErrorFallback({ error, resetErrorBoundary }) {
   return (
     <View style={styles.errorContainer}>
       <Text style={styles.errorTitle}>Something went wrong</Text>
-      <Text style={styles.errorText}>{error?.message || "Unknown error"}</Text>
-      <TouchableOpacity style={styles.errorButton} onPress={resetErrorBoundary}>
+      <Text style={styles.errorText}>
+        {error?.message || error?.toString() || "Unknown error"}
+      </Text>
+      <TouchableOpacity 
+        style={styles.errorButton} 
+        onPress={() => {
+          try {
+            resetErrorBoundary();
+          } catch (e) {
+            console.log("Error resetting:", e);
+          }
+        }}
+      >
         <Text style={styles.errorButtonText}>Try Again</Text>
       </TouchableOpacity>
     </View>
@@ -16,8 +40,31 @@ function ErrorFallback({ error, resetErrorBoundary }) {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    // Catch any unhandled promise rejections
+    const rejectionHandler = (event) => {
+      console.error("Unhandled promise rejection:", event.reason);
+      event.preventDefault();
+    };
+    
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("unhandledrejection", rejectionHandler);
+    }
+    
+    return () => {
+      if (typeof window !== "undefined" && window.removeEventListener) {
+        window.removeEventListener("unhandledrejection", rejectionHandler);
+      }
+    };
+  }, []);
+
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <ErrorBoundary 
+      FallbackComponent={ErrorFallback}
+      onError={(error, errorInfo) => {
+        console.error("ErrorBoundary caught error:", error, errorInfo);
+      }}
+    >
       <Stack
         screenOptions={{
           headerShown: false,

@@ -27,8 +27,15 @@ export default function EventsScreen() {
   const [passwordInput, setPasswordInput] = useState("");
   const [showAdminUI, setShowAdminUI] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
-  const params = useLocalSearchParams();
+  let params = null;
+  try {
+    params = useLocalSearchParams();
+  } catch (e) {
+    console.log("Error getting params:", e);
+  }
+
   const [tapCount, setTapCount] = useState(0);
 
   const [newEvent, setNewEvent] = useState({
@@ -42,10 +49,16 @@ export default function EventsScreen() {
   // LOAD EVENTS 
   // ---------------------------
   useEffect(() => {
-    // Add small delay to ensure React Native is fully initialized
+    // Add delay to ensure React Native is fully initialized
     const timer = setTimeout(() => {
-      fetchEvents();
-    }, 100);
+      try {
+        setIsReady(true);
+        fetchEvents();
+      } catch (err) {
+        console.log("Error in initial load:", err);
+        setIsReady(true);
+      }
+    }, 300);
     
     return () => clearTimeout(timer);
   }, []);
@@ -91,28 +104,32 @@ export default function EventsScreen() {
   useEffect(() => {
     const checkAdminAccess = () => {
       try {
-        // Always show in dev (Expo Go)
-        if (__DEV__) {
+        // Check if __DEV__ is available (might not be in some builds)
+        const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+        
+        if (isDev) {
           setShowAdminUI(true);
           return;
         }
 
         // Check for router param
-        if (params?.admin_key === ADMIN_SECRET_KEY) {
+        if (params && params.admin_key === ADMIN_SECRET_KEY) {
           setShowAdminUI(true);
           return;
         }
 
-
         setShowAdminUI(false);
       } catch (e) {
         console.log("Admin check error:", e);
-        setShowAdminUI(__DEV__);
+        const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+        setShowAdminUI(isDev);
       }
     };
 
-    checkAdminAccess();
-  }, [params]);
+    if (isReady) {
+      checkAdminAccess();
+    }
+  }, [params, isReady]);
 
   // ---------------------------
   // SECRET TAP TO UNLOCK ADMIN MODE
@@ -149,11 +166,19 @@ export default function EventsScreen() {
   // ADMIN LOGIN
   // ---------------------------
   const tryLogin = () => {
-    if (passwordInput === ADMIN_PASSWORD) {
-      alert("Admin access granted");
-      setAdminMode(true);
-    } else {
-      alert("Wrong password");
+    try {
+      if (passwordInput === ADMIN_PASSWORD) {
+        if (typeof alert !== "undefined") {
+          alert("Admin access granted");
+        }
+        setAdminMode(true);
+      } else {
+        if (typeof alert !== "undefined") {
+          alert("Wrong password");
+        }
+      }
+    } catch (err) {
+      console.log("Error in tryLogin:", err);
     }
   };
 
@@ -229,9 +254,26 @@ export default function EventsScreen() {
   // ---------------------------
   // UI
   // ---------------------------
+  // Don't render until ready to prevent crashes
+  if (!isReady) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>Loading...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: "Events" }} />
+      {(() => {
+        try {
+          return <Stack.Screen options={{ title: "Events" }} />;
+        } catch (e) {
+          return null;
+        }
+      })()}
 
       {/* Header */}
       <View style={styles.header}>
